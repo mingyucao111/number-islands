@@ -8,7 +8,9 @@ const output = join(nativeRoot, "www");
 
 // The native bundle ships public game resources only. Keep this list in sync with the web release.
 const files = [
-  "index.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
+  "index.html", "expeditions.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
+  "voyage/entry.js", "voyage/voyage.css", "voyage/main.mjs", "voyage/audio.mjs", "voyage/progression.mjs",
+  "voyage/world.mjs", "voyage/player.mjs", "voyage/mission.mjs", "voyage/vendor/three.module.min.js", "voyage/vendor/three.core.min.js", "voyage/vendor/LICENSE-three.txt",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "island-quests.js", "quests.css",
   "harbour.html", "harbour.css", "harbour-game.js", "harbour-rules.js",

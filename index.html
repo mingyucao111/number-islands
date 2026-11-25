@@ -2,75 +2,114 @@
 <html lang="en-SG">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Restore the lighthouse in a Singapore maths adventure from kindergarten to lower secondary.">
-  <title>Number Islands · A maths adventure</title>
-  <link rel="stylesheet" href="islands.css">
-  <script defer src="chapters-early.js"></script>
-  <script defer src="chapters-primary.js"></script>
-  <script defer src="chapters-secondary.js"></script>
-  <script defer src="chapters-finale.js"></script>
-  <script defer src="agent.js"></script>
-  <script defer src="harbour-rules.js"></script>
-  <script defer src="lesson-agent.js"></script>
-  <script defer src="islands.js"></script>
-  <link rel="stylesheet" href="harbour.css">
-  <meta name="theme-color" content="#edf4e4">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#182e28">
+  <meta name="description" content="A third-person island adventure. Explore the coast, repair the lighthouse, and learn to catch the wind.">
+  <title>Number Islands · The Last Light</title>
+  <link rel="stylesheet" href="voyage/voyage.css">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script defer src="voyage/entry.js"></script>
   <script defer src="pwa.js"></script>
-  <link rel="stylesheet" href="storybook.css">
-  <link rel="stylesheet" href="storybook-home.css">
 </head>
 <body>
-  <header class="masthead">
-    <div class="site-width masthead-inner">
-      <a class="wordmark" href="#" aria-label="Number Islands home"><span aria-hidden="true">✦</span> Number Islands</a>
-      <nav class="main-nav" aria-label="Main navigation">
-        <a class="nav-link" href="harbour.html">My harbour</a>
-        <a class="nav-link" href="arcade.html">Arcade</a>
-        <a class="nav-link" href="workshop.html">Teacher workshop <span aria-hidden="true">↗</span></a>
-        <button type="button" class="nav-link nav-install" data-install-app hidden>Install app</button>
-      </nav>
-    </div>
-  </header>
-  <main id="view" class="site-width" aria-live="off"></main>
-  <noscript><p class="site-width">Turn on JavaScript to play Number Islands.</p></noscript>
-  <template id="map-template">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="overline">Singapore maths adventure</p>
-        <h1 id="map-title" tabindex="-1">Number <br>Islands<span>.</span></h1>
-        <p id="story-start"></p>
-        <div class="button-row">
-          <button class="button cta" type="button" id="resume">Start the voyage <span aria-hidden="true">→</span></button>
-          <a class="button ghost" href="harbour.html">Build my harbour</a>
+  <main id="game-shell">
+    <canvas id="world" aria-label="The three-dimensional island" tabindex="-1" data-voyage-look></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <section id="title-screen" class="title-screen" aria-labelledby="game-title">
+      <div class="title-content">
+        <a class="brand" href="./"><span aria-hidden="true">✦</span> Number Islands</a>
+        <p class="episode-title">The Coast of Alderreach</p>
+        <h1 id="game-title">The Last<br>Light<span>.</span></h1>
+        <p class="premise">A storm has darkened the coast. Follow the old harbour path and bring the ships home.</p>
+        <div class="route-picker">
+          <label for="route-select">Choose your starting level</label>
+          <select id="route-select"></select>
+          <p id="route-details" aria-live="polite"></p>
+        </div>
+        <button type="button" class="primary" id="begin" disabled>Preparing the island…</button>
+        <div class="menu-links">
+          <button type="button" class="quiet-button" id="menu-controls">Controls</button>
+          <button type="button" class="quiet-button" data-install-app hidden>Install app</button>
+          <a href="expeditions.html">Island atlas</a>
+        </div>
+        <p class="load-message" id="load-message" role="status"></p>
+      </div>
+      <div class="title-coordinate">ALDERREACH <span aria-hidden="true">·</span> FIRST VOYAGE</div>
+    </section>
+
+    <section class="hud" id="hud" hidden aria-label="Voyage status">
+      <div class="hud-location"><span aria-hidden="true">✦</span><div><p>ALDERREACH</p><span id="hud-route"></span></div></div>
+      <div id="quest-hud">
+        <span class="hud-label">JOURNAL</span>
+        <p id="objective" aria-live="polite"></p>
+        <div class="quest-load" id="quest-load" hidden>
+          <span id="counterweight"></span>
+          <div id="load-meter" role="presentation"></div>
         </div>
       </div>
-      <div class="sea-art" aria-hidden="true">
-        <div class="art-moon"></div><div class="art-stars"></div><div class="light-ray"></div>
-        <div class="islet far-islet"></div><div class="islet near-islet"></div>
-        <div class="lighthouse"><i></i></div>
-        <div class="art-waves"></div><div class="art-boat"></div>
+      <div id="quest-compass" class="quest-compass" aria-label="Direction to the next objective">
+        <span id="bearing" aria-hidden="true">▴</span><span id="distance"></span>
+      </div>
+      <div class="hud-actions">
+        <button type="button" id="toggle-audio" aria-label="Mute ambient audio" aria-pressed="false">Sound</button>
+        <button type="button" id="pause" aria-label="Pause the game">Pause</button>
+      </div>
+      <div class="rank-strip">
+        <span id="rank-name"></span><span class="rank-xp" id="rank-xp"></span>
+      </div>
+      <p id="carry-status" class="carry-status" hidden></p>
+      <p id="notice" class="notice" aria-live="polite" hidden></p>
+      <button type="button" class="interaction" id="interaction" hidden><kbd>E</kbd><span></span></button>
+      <div class="touch-controls" id="touch-controls">
+        <div data-voyage-stick class="move-stick" aria-hidden="true"><span data-voyage-thumb></span></div>
+        <div class="touch-actions">
+          <button type="button" data-voyage-jump aria-label="Jump or glide">↑</button>
+          <button type="button" data-voyage-action aria-label="Interact">✦</button>
+        </div>
+      </div>
+      <p class="quick-controls" id="bridge-controls">WASD move <span>·</span> Drag to look <span>·</span> Space jump</p>
+    </section>
+
+    <section class="overlay" id="pause-screen" hidden aria-labelledby="pause-title">
+      <div class="overlay-content">
+        <p class="episode-title">The Last Light</p>
+        <h2 id="pause-title">At rest.</h2>
+        <div class="overlay-actions">
+          <button type="button" class="primary" id="continue">Return to the coast</button>
+          <button type="button" class="secondary" id="restart">Restart this voyage</button>
+          <button type="button" class="quiet-button" id="return-title">Choose a different route</button>
+        </div>
       </div>
     </section>
-    <section class="arcade-sign" aria-label="Extra games">
-      <div><h2>Try another adventure</h2><p>Escape a locked tower, hunt through the market, or challenge a friend.</p></div>
-      <a class="button ghost" href="arcade.html">Open the arcade →</a>
-    </section>
-    <section class="route-section" id="islands" aria-labelledby="island-title">
-      <div class="section-heading">
-        <div><h2 id="island-title">The island route</h2><p>Start at the level that suits you. Visit the islands in any order.</p></div>
-        <p class="parts-total" id="parts-total"></p>
+
+    <section class="overlay ending" id="ending-screen" hidden aria-labelledby="ending-title">
+      <div class="overlay-content">
+        <p class="episode-title">VOYAGE COMPLETE</p>
+        <h2 id="ending-title">The coast<br>is alight<span>.</span></h2>
+        <p>Across the bay, a ship answers with a lantern. The way home is open.</p>
+        <p class="wind-note" id="ending-progress"></p>
+        <div class="overlay-actions">
+          <button type="button" class="primary" id="explore">Keep exploring</button>
+          <button type="button" class="secondary" id="next-route">Sail the next route</button>
+          <button type="button" class="quiet-button" id="end-title">Return to the title</button>
+        </div>
       </div>
-      <div class="island-grid" id="island-grid"></div>
     </section>
-    <section class="beacon-box" id="beacon-box" aria-labelledby="beacon-title">
-      <div class="beacon-icon" aria-hidden="true">✦</div>
-      <div><h2 id="beacon-title">The lighthouse</h2><p id="beacon-status"></p></div>
-      <button type="button" class="button cta" id="rescue" hidden>Play the night rescue →</button>
-    </section>
-    <footer class="map-footer"><span>Progress is saved in this browser.</span> <a href="workshop.html">Make a lesson from a PowerPoint</a></footer>
-  </template>
+
+    <dialog id="controls">
+      <h2>Find your feet</h2>
+      <dl>
+        <dt>Move or run</dt><dd>WASD / arrow keys. Hold Shift to run. On a touchscreen, use the left stick.</dd>
+        <dt>Look around</dt><dd>Drag the scene, or use Q and R to turn the camera.</dd>
+        <dt>Jump &amp; fly</dt><dd>Space or ↑ to jump. After restoring the light, hold it in mid-air to glide.</dd>
+        <dt>Use what’s nearby</dt><dd>Press E or tap the star button when you approach an object.</dd>
+      </dl>
+      <button class="primary" id="close-controls" type="button">Back</button>
+    </dialog>
+
+    <noscript><p class="no-script">Turn on JavaScript to explore Alderreach.</p></noscript>
+  </main>
 </body>
 </html>

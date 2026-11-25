@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Restore the lighthouse in a Singapore maths adventure from kindergarten to lower secondary.">
+  <title>Number Islands · A maths adventure</title>
+  <link rel="stylesheet" href="islands.css">
+  <script defer src="chapters-early.js"></script>
+  <script defer src="chapters-primary.js"></script>
+  <script defer src="chapters-secondary.js"></script>
+  <script defer src="chapters-finale.js"></script>
+  <script defer src="agent.js"></script>
+  <script defer src="harbour-rules.js"></script>
+  <script defer src="lesson-agent.js"></script>
+  <script defer src="islands.js"></script>
+  <link rel="stylesheet" href="harbour.css">
+  <meta name="theme-color" content="#edf4e4">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script defer src="pwa.js"></script>
+  <link rel="stylesheet" href="storybook.css">
+  <link rel="stylesheet" href="storybook-home.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="site-width masthead-inner">
+      <a class="wordmark" href="#" aria-label="Number Islands home"><span aria-hidden="true">✦</span> Number Islands</a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link" href="./">3D voyage</a>
+        <a class="nav-link" href="harbour.html">My harbour</a>
+        <a class="nav-link" href="arcade.html">Arcade</a>
+        <a class="nav-link" href="workshop.html">Teacher workshop <span aria-hidden="true">↗</span></a>
+        <button type="button" class="nav-link nav-install" data-install-app hidden>Install app</button>
+      </nav>
+    </div>
+  </header>
+  <main id="view" class="site-width" aria-live="off"></main>
+  <noscript><p class="site-width">Turn on JavaScript to play Number Islands.</p></noscript>
+  <template id="map-template">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="overline">Singapore maths adventure</p>
+        <h1 id="map-title" tabindex="-1">Number <br>Islands<span>.</span></h1>
+        <p id="story-start"></p>
+        <div class="button-row">
+          <button class="button cta" type="button" id="resume">Start the voyage <span aria-hidden="true">→</span></button>
+          <a class="button ghost" href="harbour.html">Build my harbour</a>
+        </div>
+      </div>
+      <div class="sea-art" aria-hidden="true">
+        <div class="art-moon"></div><div class="art-stars"></div><div class="light-ray"></div>
+        <div class="islet far-islet"></div><div class="islet near-islet"></div>
+        <div class="lighthouse"><i></i></div>
+        <div class="art-waves"></div><div class="art-boat"></div>
+      </div>
+    </section>
+    <section class="arcade-sign" aria-label="Extra games">
+      <div><h2>Try another adventure</h2><p>Escape a locked tower, hunt through the market, or challenge a friend.</p></div>
+      <a class="button ghost" href="arcade.html">Open the arcade →</a>
+    </section>
+    <section class="route-section" id="islands" aria-labelledby="island-title">
+      <div class="section-heading">
+        <div><h2 id="island-title">The island route</h2><p>Start at the level that suits you. Visit the islands in any order.</p></div>
+        <p class="parts-total" id="parts-total"></p>
+      </div>
+      <div class="island-grid" id="island-grid"></div>
+    </section>
+    <section class="beacon-box" id="beacon-box" aria-labelledby="beacon-title">
+      <div class="beacon-icon" aria-hidden="true">✦</div>
+      <div><h2 id="beacon-title">The lighthouse</h2><p id="beacon-status"></p></div>
+      <button type="button" class="button cta" id="rescue" hidden>Play the night rescue →</button>
+    </section>
+    <footer class="map-footer"><span>Progress is saved in this browser.</span> <a href="workshop.html">Make a lesson from a PowerPoint</a></footer>
+  </template>
+</body>
+</html>

@@ -1,10 +1,18 @@
-# Number Islands · 数字群岛
+# Number Islands · The Last Light
 
-[Play Number Islands](https://mingyucao111.github.io/number-islands/) · [My Harbour](https://mingyucao111.github.io/number-islands/harbour.html) · [Arcade](https://mingyucao111.github.io/number-islands/arcade.html) · [Teacher Workshop](https://mingyucao111.github.io/number-islands/workshop.html)
+[Play The Last Light](https://mingyucao111.github.io/number-islands/) · [Island Atlas](https://mingyucao111.github.io/number-islands/expeditions.html) · [Teacher Workshop](https://mingyucao111.github.io/number-islands/workshop.html)
 
-A Singapore maths adventure from K1 to Secondary 3. Collect six lighthouse parts in the story, start a shipping business, or visit the arcade. Play immediately in a browser and continue on the same device.
+A third-person 3D island adventure set on the coast of Alderreach. Control an explorer, meet the lighthouse keeper, carry counterweights to the winch and take the recovered lens up to the beacon. Completing the voyage unlocks gliding. Play in a browser with WebGL 2.
 
-## Play
+## The Last Light
+
+- **Desktop.** Use WASD or the arrow keys to move, Shift to run, drag to look, E to interact, and Space to jump. Hold Space during the descent after unlocking gliding.
+- **Touchscreen.** Use the left stick to move, drag the scene to look and use the two right-hand buttons to jump or interact.
+- **Progression.** Start at any of the six bands from K1–K2 to Secondary 2–3. Each is a different version of the winch challenge on the same coast. Milestones earn XP once per route, advance the player’s rank and persist in the current browser. The pier is the start point for each voyage.
+
+The 3D renderer is the MIT-licensed Three.js r183. The scene, character and tasks were built for Number Islands. [Three.js license](voyage/vendor/LICENSE-three.txt)
+
+## Island Atlas
 
 - **Story voyage.** Pick any of the six islands. Recover its lighthouse part and unlock a night rescue. Visit a completed island for more practice, or take a two-puzzle pass on earlier islands after you have made progress on a later one.
 - **My Harbour.** Pick an order, drag or tap cargo into the hold, then steer around reefs to the destination. Spend the shells earned from deliveries on a bigger boat and new routes, or on a dock with more orders. Shells are in-game currency.
@@ -33,7 +41,7 @@ node scripts/author-lesson.mjs /path/to/lesson.txt > lesson.generated.json
 
 ## Install and test
 
-Open `index.html` to play locally, or use the live link above. On an eligible browser, install the web app from the browser menu. For iOS, Android and signed native builds, see [Mobile setup](MOBILE.md).
+Use the live link above or serve the repository locally with `python3 -m http.server 8000` and open `http://localhost:8000`. On an eligible browser, install the web app from the browser menu. For iOS, Android and signed native builds, see [Mobile setup](MOBILE.md).
 
 ```sh
 node --test

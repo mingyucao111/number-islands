@@ -1,6 +1,6 @@
 # Number Islands on phones
 
-Open [the web edition](https://mingyucao111.github.io/number-islands/) once while online. The web app stores game progress on the device and caches game files for offline play. Reopen it while online after an update. Progress stays with the browser or installation where you played.
+Open [the web edition](https://mingyucao111.github.io/number-islands/) once while online. The 3D voyage requires WebGL 2. Use the left stick to move and drag the scene to look around. The web app stores progress on the device and caches game files for offline play. Reopen it while online after an update. Progress stays with the browser or installation where you played.
 
 - **iPhone and iPad:** Open the game in Safari. Tap **Share → Add to Home Screen**, turn on **Open as Web App** if offered, then tap **Add**. [Apple instructions](https://support.apple.com/en-sg/guide/iphone/iph42ab2f3a7/ios)
 - **Android:** Open the game in Chrome. Tap **More → Install and create shortcut → Install**, or use **Install app** when shown. [Chrome instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en)
