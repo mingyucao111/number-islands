@@ -11,13 +11,25 @@
   <script defer src="chapters-secondary.js"></script>
   <script defer src="chapters-finale.js"></script>
   <script defer src="agent.js"></script>
+  <script defer src="harbour-rules.js"></script>
+  <script defer src="lesson-agent.js"></script>
   <script defer src="islands.js"></script>
+  <link rel="stylesheet" href="harbour.css">
+  <meta name="theme-color" content="#102b34">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script defer src="pwa.js"></script>
 </head>
 <body>
   <header class="masthead">
     <div class="site-width masthead-inner">
       <a class="wordmark" href="#" aria-label="Number Islands home"><span aria-hidden="true">✦</span> Number Islands</a>
-      <a class="nav-link" href="fraction-ferries.html">Teacher workshop <span aria-hidden="true">↗</span></a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link" href="harbour.html">My harbour</a>
+        <a class="nav-link" href="arcade.html">Arcade</a>
+        <a class="nav-link" href="workshop.html">Teacher workshop <span aria-hidden="true">↗</span></a>
+        <button type="button" class="nav-link nav-install" data-install-app hidden>Install app</button>
+      </nav>
     </div>
   </header>
   <main id="view" class="site-width" aria-live="off"></main>
@@ -30,7 +42,7 @@
         <p id="story-start"></p>
         <div class="button-row">
           <button class="button cta" type="button" id="resume">Start the voyage <span aria-hidden="true">→</span></button>
-          <a class="button ghost" href="#islands">Choose an island</a>
+          <a class="button ghost" href="harbour.html">Build my harbour</a>
         </div>
       </div>
       <div class="sea-art" aria-hidden="true">
@@ -39,6 +51,10 @@
         <div class="lighthouse"><i></i></div>
         <div class="art-waves"></div><div class="art-boat"></div>
       </div>
+    </section>
+    <section class="arcade-sign" aria-label="Extra games">
+      <div><h2>Try another adventure</h2><p>Escape a locked tower, hunt through the market, or challenge a friend.</p></div>
+      <a class="button ghost" href="arcade.html">Open the arcade →</a>
     </section>
     <section class="route-section" id="islands" aria-labelledby="island-title">
       <div class="section-heading">
@@ -52,7 +68,7 @@
       <div><h2 id="beacon-title">The lighthouse</h2><p id="beacon-status"></p></div>
       <button type="button" class="button cta" id="rescue" hidden>Play the night rescue →</button>
     </section>
-    <footer class="map-footer">Progress is saved in this browser. <a href="fraction-ferries.html">Make a fraction lesson</a></footer>
+    <footer class="map-footer"><span>Progress is saved in this browser.</span> <a href="workshop.html">Make a lesson from a PowerPoint</a></footer>
   </template>
 </body>
 </html>

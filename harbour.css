@@ -1,0 +1,109 @@
+.main-nav { display: flex; align-items: center; gap: clamp(.5rem, 2vw, 1.3rem); }
+.nav-install { background: transparent; border: 0; padding: .25rem 0; min-height: 44px; }
+.plain-link { color: #d8e5d9; text-underline-offset: .22em; font-size: .92rem; }
+.studio-hero { padding: 1.5rem 0 1.25rem; }
+.studio-hero h1, .harbour-title { font-size: clamp(2.55rem, 7vw, 5.3rem); letter-spacing: -.076em; line-height: .93; margin: .35rem 0 .8rem; }
+.studio-hero > p:last-child { max-width: 35rem; color: #c7d9d6; line-height: 1.55; }
+.workshop, .harbour { padding: 1.2rem 0 3rem; }
+.studio-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.studio-panel, .port-card, .harbour-task { border: 1px solid var(--line); border-radius: var(--round); background: #103643; padding: clamp(.85rem, 3vw, 1.45rem); }
+.studio-panel h2, .harbour h2 { font-size: clamp(1.23rem, 3vw, 1.75rem); letter-spacing: -.045em; }
+.deck-drop { display: grid; place-items: center; text-align: center; position: relative; min-height: 153px; border: 2px dashed #709b94; border-radius: 16px;
+  padding: .9rem; background: #103f47; margin: .7rem 0; color: #f5f0df; cursor: pointer; }
+.deck-drop:hover, .deck-drop.drag-over { background: #1d5156; border-color: #b5e0c2; }
+.deck-drop:focus-within { outline: 3px solid var(--gold); outline-offset: 4px; }
+.deck-drop span:not(.deck-icon) { font-size: .84rem; color: #b9d2ce; }
+.deck-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 1.8rem; color: #23403c; background: #d4e8c8; }
+.deck-drop input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.studio-note { color: #c2d6d0; line-height: 1.47; font-size: .9rem; margin-top: .55rem; }
+.studio-status { color: #fae1a6; margin-top: .6rem; line-height: 1.4; font-weight: 650; }
+.studio-details { margin-top: 1rem; border-top: 1px solid #40616a; padding-top: .75rem; }
+.studio-details summary { cursor: pointer; font-weight: 700; }
+.studio-details p { margin: .55rem 0; color: #c9ded5; }
+.studio-details a { display: inline-block; margin-left: .55rem; }
+.preview-title { font-size: 1.18rem; font-weight: 800; color: #fae1a6; margin: .7rem 0 .35rem; }
+.lesson-missions { padding-left: 1.6rem; line-height: 1.4; }
+.lesson-missions li { margin: .45rem 0; padding-left: .15rem; }
+#student-link { display: block; box-sizing: border-box; width: 100%; min-height: 44px; margin-top: .24rem; border-radius: 9px; border: 1px solid #618877; background: #122e39; color: #fff8e1; padding: .35rem .5rem; }
+.result-panel .button-row { margin-bottom: .7rem; }
+.arcade-sign { margin: 1.2rem 0 0; padding: .85rem 1.1rem; display: flex; justify-content: space-between; gap: .85rem; align-items: center; border: 1px solid #425c66; border-radius: 17px; background: #143440; }
+.arcade-sign h2 { font-size: 1.2rem; letter-spacing: -.034em; }
+.arcade-sign p { color: #c4d8d2; margin-top: .17rem; }
+.class-hold { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; background: #487b79; border-radius: 13px 13px 26px 26px; padding: .5rem; }
+.class-hold span { background: #f2f7df; color: #3a5b58; border-radius: 5px; min-height: 32px; display: grid; place-items: center; }
+.class-hold .loaded { background: #f4cd82; }
+.cargo-source { touch-action: none; }
+
+.port-banner { min-height: 230px; border-radius: 26px; isolation: isolate; overflow: hidden; position: relative; display: flex; align-items: center;
+  padding: clamp(1.15rem, 4vw, 2.25rem); background: linear-gradient(135deg, #214d4d 0%, #1c585e 57%, #21515d 100%); border: 1px solid #4f756f; }
+.port-banner > div:first-child { position: relative; z-index: 1; max-width: 34rem; }
+.port-banner p:not(.overline) { color: #e2ead9; max-width: 26rem; line-height: 1.45; }
+.port-art { position: absolute; inset: 0 0 0 52%; opacity: .82; }
+.port-art .port-sun { position: absolute; background: #ffdf9f; box-shadow: 0 0 38px #ffde9a35; width: 64px; height: 64px; border-radius: 50%; right: 14%; top: 10%; }
+.port-art .port-dock { position: absolute; left: 7%; right: 4%; height: 25%; bottom: 12%; background: #966d51; border: 5px solid #805741; border-radius: 9% 6% 18% 9%; }
+.port-art .port-dock::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 17px, #60483f5a 18px 20px); }
+.port-art .port-hut { position: absolute; bottom: 37%; height: 26%; width: 21%; left: 12%; background: #d69268; box-shadow: inset -7px 0 #ba7654; }
+.port-art .port-hut::before { content: ""; position: absolute; bottom: 98%; left: -9%; right: -7%; height: 46%; background: #93495b; clip-path: polygon(0 100%, 50% 0, 100% 100%); }
+.port-art .port-hut::after { content: ""; position: absolute; width: 22%; height: 34%; left: 43%; bottom: 0; background: #39525a; border-radius: 5px 5px 0 0; }
+.port-art .port-hut.second { left: 38%; opacity: .28; background: #e7b684; }
+.port-art .port-hut.third { left: 64%; opacity: .22; height: 35%; background: #bc9fd8; }
+.port-art[data-dock="1"] .port-hut.second, .port-art[data-dock="2"] .port-hut { opacity: 1; }
+.port-banner .boat-icon { position: absolute; bottom: 10%; right: 4%; font-size: 3.3rem; }
+.port-art[data-boat="1"] .boat-icon { transform: scale(1.18); }
+.port-art[data-boat="2"] .boat-icon { transform: scale(1.37); }
+
+.harbour-stats { display: flex; flex-wrap: wrap; gap: .6rem; margin: .9rem 0 1.15rem; }
+.stat-chip { padding: .52rem .72rem; background: #153b48; border: 1px solid #3b5f6c; border-radius: 999px; color: #e4ece1; font-weight: 730; }
+.stat-chip:first-child { color: #ffe19e; }
+#difficulty { border: 1px solid #5f847d; border-radius: 8px; background: #163a47; color: #fff6dc; padding: .36rem; min-height: 42px; }
+.harbour-board { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, .85fr); align-items: start; gap: 1rem; }
+.contract-list, .upgrade-list { display: grid; gap: .55rem; margin-top: .6rem; }
+.port-card { padding: .85rem; }
+.port-card h3 { letter-spacing: -.025em; }
+.port-card p { color: #c4d9d1; font-size: .9rem; line-height: 1.45; margin: .24rem 0 .65rem; }
+.port-card .overline { color: #f6d997; }
+.port-message { margin: .65rem 0; min-height: 1.25rem; color: #f6dfaa; font-weight: 700; }
+.harbour-task { background: #fff8e8; color: #173a3d; border-color: #d0d6b9; max-width: 830px; margin-inline: auto; }
+.harbour-task .overline { color: #32756d; }
+.harbour-task .button.ghost { color: #1a4849; background: #fffdf4; border-color: #86afa2; }
+.harbour-task .button.ghost:hover { background: #dcf0df; }
+.harbour-task .button.cta { color: #fff9eb; background: #216c64; }
+.harbour-task .button.cta:hover { background: #15574f; }
+.harbour-task :focus-visible { outline-color: #713e7c; }
+.harbour-task p.task-brief { font-size: 1.08rem; line-height: 1.45; margin: .45rem 0 .8rem; }
+.loading-board { display: grid; grid-template-columns: 1fr 1.35fr; gap: .75rem; margin: .7rem 0; }
+.loading-box { background: #e4eee1; border: 1px solid #9fbcae; border-radius: 14px; padding: .7rem; }
+.loading-box h3 { margin-bottom: .5rem; }
+.cargo-menu { display: grid; gap: .35rem; }
+.cargo-menu .button { justify-content: start; }
+.hold-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .26rem; min-height: 118px; align-content: start;
+  padding: .45rem; border-radius: 12px 12px 29px 29px; border-bottom: 6px solid #2f6561; background: #63938a; }
+.hold-slots > * { min-width: 0; min-height: 41px; padding: 0; display: grid; place-items: center; border-radius: 7px; color: #396e61; border: 1px solid #bccebc; background: #f2f6e8; font-size: 1rem; }
+.hold-slots button { background: #ffe0a0; border-color: #c59e61; }
+.hold-meta { margin: .4rem 0 0; color: #2b5853; font-size: .89rem; font-weight: 700; }
+.cargo-menu button { touch-action: none; }
+.drag-preview { position: fixed; z-index: 20; pointer-events: none; transform: translate(-50%, -50%); font-size: 2.2rem; }
+.retry-line { margin-top: .55rem; min-height: 1.25rem; color: #81432d; font-weight: 750; }
+.ship-chart { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .22rem; max-width: 500px; margin: .75rem 0; padding: .4rem; border-radius: 14px; background: #318a9e; }
+.ship-chart span { display: grid; place-items: center; aspect-ratio: 1.25; border-radius: 7px; background: #5cabb6; color: #e5f4ef; font-size: clamp(.9rem, 3.5vw, 1.65rem); }
+.ship-chart .reef { background: #6d8e86; }
+.ship-chart .pier { background: #d1ad70; }
+.ship-chart .ship { border: 2px solid #fff0a5; background: #7cbaad; }
+.helm { display: flex; flex-wrap: wrap; gap: .37rem; }
+.helm .button { min-width: 49px; font-size: 1.3rem; }
+.reward-ship { display: inline-grid; place-items: center; width: 72px; height: 72px; border-radius: 20px; background: #f4db9b; font-size: 2rem; margin-bottom: .6rem; }
+@media (max-width: 680px) {
+  .studio-layout, .harbour-board { grid-template-columns: 1fr; }
+  .arcade-sign { align-items: flex-start; flex-direction: column; }
+  .main-nav { gap: .42rem; flex-wrap: wrap; justify-content: flex-end; }
+  .main-nav a { font-size: .73rem; }
+  .port-banner { min-height: 205px; }
+  .port-art { opacity: .4; inset-inline-start: 45%; }
+}
+@media (max-width: 465px) {
+  .loading-board { grid-template-columns: 1fr; }
+  .cargo-menu { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cargo-menu .button { line-height: 1.08; font-size: .77rem; padding: .35rem; min-width: 0; }
+  .hold-slots > * { min-height: 44px; }
+  .class-hold { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}

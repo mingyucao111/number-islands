@@ -14,10 +14,12 @@
   ];
   const finale = window.NUMBER_ISLANDS_FINALE;
   const guide = window.NumberIslandsAgent;
+  const rules = window.NumberIslandsRules;
   const view = document.getElementById("view");
   const storageKey = "number-islands-v1";
   const skillKinds = ["build", "pattern", "grid", "choices", "fraction", "number", "balance", "coordinate"];
   const save = readSave();
+  let learner = readLearner();
 
   function node(tag, text, className) {
     const element = document.createElement(tag);
@@ -76,6 +78,16 @@
       return false;
     }
     return true;
+  }
+
+  function readLearner() {
+    try { return rules.restore(JSON.parse(localStorage.getItem("number-islands-harbour-v1") ?? "null")); }
+    catch { return rules.newProgress(); }
+  }
+
+  function assess(chapter, attempts, usedHint) {
+    learner = rules.observe(readLearner(), `island:${chapter.id}`, { attempts, usedHint });
+    try { localStorage.setItem("number-islands-harbour-v1", JSON.stringify(learner)); } catch { /* optional storage */ }
   }
 
   function complete(chapter) {
@@ -212,8 +224,10 @@
   }
 
   function startPractice(chapter) {
-    const first = guide.practiceMission(chapter, random, save.needs[chapter.id]);
-    play({ kind: "practice", chapter, questions: [first], index: 0, clean: true });
+    learner = readLearner();
+    const tier = rules.tierFor(learner, `island:${chapter.id}`);
+    const first = guide.practiceMission(chapter, random, save.needs[chapter.id], tier);
+    play({ kind: "practice", chapter, questions: [first], index: 0, clean: true, tier });
   }
 
   function startPass(chapter) {
@@ -228,6 +242,7 @@
 
   function returnToRoute(flow) {
     if (flow.kind === "rescue") showMap();
+    else if (flow.kind === "lesson") showClassVoyage(flow.chapter.recipe);
     else showChapter(flow.chapter);
   }
 
@@ -235,11 +250,15 @@
     const { kind, chapter, questions, index } = flow;
     const mission = questions[index];
     const screen = showScreen(chapter.theme);
-    screen.append(button(kind === "rescue" ? "← Island route" : `← ${chapter.title}`, () => returnToRoute(flow), "ghost-link"));
+    screen.append(button(kind === "rescue" ? "← Island route" : `← ${chapter.title}`, () => {
+      if (!solved && (attempts > 0 || usedHint) && (kind === "mission" || kind === "practice")) assess(chapter, attempts, usedHint);
+      returnToRoute(flow);
+    }, "ghost-link"));
     const panel = node("article", undefined, "play-panel");
-    const stage = { mission: "Mission", rescue: "Rescue", practice: "Practice", pass: "Harbour pass" }[kind];
+    const stage = { mission: "Mission", rescue: "Rescue", practice: "Practice", pass: "Harbour pass", lesson: "Stop" }[kind];
     const title = node("h1", mission.title, "screen-title");
-    const indexLabel = kind === "practice" ? stage : `${stage} ${index + 1} of ${questions.length}`;
+    const indexLabel = kind === "practice" ? `Lumi practice · ${{ support: "Supported", core: "Standard", stretch: "Stretch" }[flow.tier]}`
+      : `${stage} ${index + 1} of ${questions.length}`;
     panel.append(node("p", `${chapter.band} · ${indexLabel}`, "overline"), title, node("p", mission.prompt, "prompt"));
     const activity = node("div", undefined, "activity");
     const form = node("form");
@@ -259,7 +278,7 @@
     let attempts = 0;
     let solved = false;
     let usedHint = false;
-    const check = node("button", "Check", "button cta");
+    const check = node("button", kind === "lesson" ? mission.action : "Check", "button cta");
     check.type = "submit";
     check.id = "check";
     const hint = button("Ask Lumi for a hint", () => {
@@ -303,9 +322,10 @@
       }
       solved = true;
       flow.clean = flow.clean && attempts === 0 && !usedHint;
+      if (kind === "mission" || kind === "practice") assess(chapter, attempts, usedHint);
       recordWin(flow, attempts > 0 || usedHint);
       result.className = "response solved";
-      result.textContent = "Puzzle solved!";
+      result.textContent = mission.success ?? "Puzzle solved!";
       check.hidden = true;
       hint.hidden = true;
       next.hidden = false;
@@ -324,6 +344,7 @@
 
   function recordWin(flow, neededHelp) {
     const { kind, chapter, index, questions, clean } = flow;
+    if (kind === "lesson") return;
     if (kind === "mission" || kind === "practice") {
       const needs = (save.needs[chapter.id] ??= {});
       const mechanic = questions[index].kind;
@@ -356,6 +377,17 @@
 
   function showWin(flow) {
     const { kind, chapter } = flow;
+    if (kind === "lesson") {
+      const screen = showScreen(chapter.theme);
+      const panel = node("article", undefined, "play-panel win-panel solved-panel");
+      const title = node("h1", "Class voyage delivered!", "screen-title");
+      const actions = node("div", undefined, "button-row");
+      actions.append(button("Replay voyage", () => showClassVoyage(chapter.recipe), "button cta"), button("Explore the islands", () => showMap()));
+      panel.append(title, node("p", `Your crew completed all ${flow.questions.length} stops.`, "prompt"), actions);
+      screen.append(panel);
+      focusTitle(title);
+      return;
+    }
     const screen = showScreen(chapter.theme);
     const panel = node("article", undefined, "play-panel win-panel solved-panel");
     const icon = node("span", kind === "rescue" ? "✦" : chapter.icon, "island-icon");
@@ -637,6 +669,81 @@
     return { evaluate: () => canCheck(x.get() === mission.answer, "The sides have different values. Adjust x.") };
   }
 
+  function classCargo(container, mission) {
+    const hold = node("div", undefined, "class-hold");
+    const countLabel = node("p", undefined, "activity-caption");
+    countLabel.setAttribute("role", "status");
+    const depot = button("📦 Add one crate", () => update(count + 1), "button ghost cargo-source");
+    const unload = button("Remove one crate", () => update(count - 1));
+    let count = mission.starting ?? 0;
+    depot.draggable = true;
+    depot.addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", "lesson-crate"));
+    hold.addEventListener("dragover", (event) => event.preventDefault());
+    hold.addEventListener("drop", (event) => {
+      event.preventDefault();
+      if (!depot.disabled && event.dataTransfer.getData("text/plain") === "lesson-crate") update(count + 1);
+    });
+    const slots = Array.from({ length: 20 }, () => node("span", "·"));
+    hold.setAttribute("aria-label", "Cargo hold");
+    hold.append(...slots);
+    const commands = node("div", undefined, "button-row");
+    commands.append(depot, unload);
+    container.append(node("p", "Cargo hold", "activity-label"), hold, countLabel, commands);
+    function update(value) {
+      count = Math.min(20, Math.max(0, value));
+      countLabel.textContent = `${count} crates aboard`;
+      slots.forEach((slot, index) => {
+        slot.textContent = index < count ? "📦" : "·";
+        slot.classList.toggle("loaded", index < count);
+      });
+      unload.disabled = count === 0;
+      depot.disabled = count === 20;
+    }
+    update(count);
+    return { evaluate: () => canCheck(count === mission.target, count < mission.target ? "There is still space in this order. Load more crates." : "The order has too many crates. Unload some.") };
+  }
+
+  function classMission(task) {
+    if (task.kind === "load") {
+      const change = task.change;
+      return { ...task, kind: "cargo", title: "Fill the cargo hold", action: "Send this cargo", success: "Cargo shipped!",
+        prompt: change === undefined ? `Load ${task.target} crates for the delivery.`
+          : `The ferry starts with ${task.starting} crates. ${change < 0 ? "Unload" : "Load"} ${Math.abs(change)} crates before you set sail.`,
+        hint: "Start with the crates already aboard. Move one crate at a time and watch the total.",
+        explain: `${task.target} crates reached the next island.` };
+    }
+    if (task.kind === "fraction") {
+      const target = task.numerator * task.splitInto / task.denominator;
+      return { ...task, title: "Send matching ferries", action: "Send both ferries", success: "Both ferries set sail!",
+        prompt: "Give Ferry B the same share of cargo as Ferry A so the flotilla can leave together.",
+        hint: "The boats have the same length. Compare how far the two loads reach.",
+        explain: `The two holds carry the same share: ${task.numerator}/${task.denominator} = ${target}/${task.splitInto}.` };
+    }
+    if (task.kind === "grid") {
+      const target = task.rows * task.cols;
+      return { ...task, rows: 6, cols: 6, target, rectangle: [task.rows, task.cols], title: "Repair the landing deck", action: "Open the landing deck", success: "Deck repaired!",
+        prompt: `From the top left, lay ${task.rows} rows with ${task.cols} tiles in each row. Make a rectangle for the boats to dock.`,
+        hint: "Keep every row the same length and line them up from the left.",
+        explain: `${task.rows} rows of ${task.cols} tiles cover ${target} square units.` };
+    }
+    return { ...task, answer: (task.rhs - task.constant) / task.coefficient, title: "Balance the dock crane",
+      action: "Lower the crane", success: "The crane lowered safely!", prompt: "Set the counterweight x to balance both sides of the crane.",
+      hint: "Undo the fixed amount first. Then divide by the number of equal weights.",
+      explain: `Both sides now balance at ${task.rhs}.` };
+  }
+
+  function showClassVoyage(recipe) {
+    const chapter = { recipe, title: recipe.title, band: "Class voyage", icon: "⛴️", theme: "water" };
+    const screen = showScreen(chapter.theme);
+    const panel = node("article", undefined, "play-panel win-panel");
+    const title = node("h1", chapter.title, "screen-title");
+    panel.append(node("p", chapter.band, "overline"), title,
+      node("p", `Your crew has ${recipe.tasks.length} ${recipe.tasks.length === 1 ? "stop" : "stops"}. Move cargo and repair the harbour as you sail.`, "prompt"),
+      button("Board the ferry →", () => play({ kind: "lesson", chapter, questions: recipe.tasks.map(classMission), index: 0, clean: true }), "button cta"));
+    screen.append(panel);
+    focusTitle(title);
+  }
+
   const activityControls = {
     build: buildActivity,
     choices: choicesActivity,
@@ -646,12 +753,25 @@
     number: numberActivity,
     coordinate: coordinateActivity,
     balance: balanceActivity,
+    cargo: classCargo,
   };
 
   document.querySelector(".wordmark").addEventListener("click", (event) => {
     event.preventDefault();
+    if (location.hash.startsWith("#lesson=")) history.replaceState(null, "", location.pathname + location.search);
     showMap();
   });
 
-  showMap(false);
+  function route() {
+    if (!location.hash.startsWith("#lesson=")) { showMap(false); return; }
+    try { showClassVoyage(window.NumberIslandsLessons.decode(location.hash.slice(8))); }
+    catch {
+      showMap(false);
+      const notice = node("p", "This voyage link is invalid. You can still explore the islands.", "arcade-sign");
+      notice.setAttribute("role", "status");
+      view.prepend(notice);
+    }
+  }
+  window.addEventListener("hashchange", route);
+  route();
 })();

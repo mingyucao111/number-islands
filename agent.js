@@ -54,17 +54,34 @@
       ?? chapters.at(-1).id;
   }
 
-  function practiceMission(chapter, random, practiceNeeds = {}) {
+  function challengeSize(mission) {
+    if (mission.kind === "build") return mission.target + (mission.clue === undefined ? 2 : 0);
+    if (mission.kind === "pattern") return new Set(mission.sequence).size + mission.sequence.length;
+    if (mission.kind === "grid") return mission.target;
+    if (mission.kind === "fraction") return mission.denominator + mission.splitInto + (mission.splitInto % mission.denominator ? 5 : 0);
+    if (mission.kind === "balance") return Math.abs(mission.coefficient) + Math.abs(mission.constant) + (mission.answer < 0 ? 5 : 0);
+    if (mission.kind === "coordinate") return Math.abs(mission.x) + Math.abs(mission.y) + (mission.prompt.includes("=") ? 4 : 0);
+    const operands = (mission.model ?? mission.prompt).match(/\d+/g) ?? [];
+    return operands.reduce((total, number) => total + Math.log2(1 + Number(number)), 0);
+  }
+
+  function practiceMission(chapter, random, practiceNeeds = {}, tier = "core") {
     const preferred = Object.entries(practiceNeeds)
       .filter(([, count]) => Number.isSafeInteger(count) && count > 0)
       .sort(([, left], [, right]) => right - left)[0]?.[0];
     const first = chapter.practice(random);
-    if (!preferred || first.kind === preferred) return first;
+    if (tier === "core" && (!preferred || first.kind === preferred)) return first;
+    const candidates = [first];
     for (let attempt = 0; attempt < 6; attempt++) {
       const candidate = chapter.practice(random);
-      if (candidate.kind === preferred) return candidate;
+      if (tier === "core" && candidate.kind === preferred) return candidate;
+      candidates.push(candidate);
     }
-    return first;
+    if (tier === "core") return first;
+    const focused = candidates.filter((mission) => mission.kind === (preferred ?? first.kind));
+    if (!focused.length) return first;
+    const direction = tier === "stretch" ? 1 : -1;
+    return focused.reduce((best, mission) => direction * (challengeSize(mission) - challengeSize(best)) > 0 ? mission : best);
   }
 
   scope.NumberIslandsAgent = Object.freeze({ respond, suggestChapter, practiceMission });

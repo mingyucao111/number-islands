@@ -1,51 +1,42 @@
 # Number Islands · 数字群岛
 
-A Singapore maths adventure from K1 to Secondary 3. Recover six lighthouse parts and bring the last boats safely home. Start on any island and continue from the same browser.
+[Play Number Islands](https://mingyucao111.github.io/number-islands/) · [My Harbour](https://mingyucao111.github.io/number-islands/harbour.html) · [Arcade](https://mingyucao111.github.io/number-islands/arcade.html) · [Teacher Workshop](https://mingyucao111.github.io/number-islands/workshop.html)
 
-## Play locally
+A Singapore maths adventure from K1 to Secondary 3. Collect six lighthouse parts in the story, start a shipping business, or visit the arcade. Play immediately in a browser and continue on the same device.
 
-Open `index.html` in a browser. The six islands contain five story missions each, followed by a five-mission night rescue. After recovering an island’s part, select **Try a new practice puzzle** to get another problem. Once you solve a mission on a later island, you can attempt a two-puzzle harbour pass on an earlier island.
+## Play
 
-| Band | Island | Sample maths |
-| --- | --- | --- |
-| K1–K2 | Shell Beach | Count objects, compare amounts, continue repeating patterns |
-| P1–P2 | Lantern Market | Tens and ones, add and subtract, make equal groups |
-| P3–P4 | Ferry Harbour | Equivalent fractions, area by counting units, length |
-| P5–P6 | Coral Workshop | Ratio, percentage, volume |
-| Sec 1 | Compass Ridge | Signed numbers, plotting points, linear equations |
-| Sec 2–3 | Beacon Heights | Gradient, Pythagoras, factorised quadratics |
+- **Story voyage.** Pick any of the six islands. Recover its lighthouse part and unlock a night rescue. Visit a completed island for more practice, or take a two-puzzle pass on earlier islands after you have made progress on a later one.
+- **My Harbour.** Pick an order, drag or tap cargo into the hold, then steer around reefs to the destination. Spend the shells earned from deliveries on a bigger boat and new routes, or on a dock with more orders. Shells are in-game currency.
+- **Island Arcade.** Search for the right objects in the cartographer’s cabin, escape the locked Tideglass Vault, or mix and stir imaginary ingredients in the witch’s potion garden.
+- **Cargo Duel.** Send someone a link to the same cabin layout. Play on your own devices and send back a result link to compare moves. This is asynchronous play. Results are carried in the link and self-reported.
 
-The bands suggest where to start. Topic timing varies by school and subject level. This version provides sample missions across the bands. [MOE early numeracy](https://nel.moe.edu.sg/la/numeracy/overview/) · [MOE Primary Mathematics Syllabus](https://www.moe.gov.sg/-/media/files/primary/2021-primary-mathematics-syllabus-p1-to-p6-updated-october-2025.pdf) · [MOE G2/G3 Secondary Mathematics Syllabuses](https://www.moe.gov.sg/-/media/files/secondary/fsbb/syllabus/2020-g2-and-g3-mathematics-syllabuses.pdf)
+Lumi maintains a separate profile for each island and for cargo orders. Two consecutive first-try solutions without hints can unlock harder practice. Repeated hints or failed checks can bring back gentler tasks. Time is not used for difficulty. In the harbour you can also pick a difficulty yourself. Story and teacher missions preserve their authored goals.
 
-## Lumi and the authoring harness
+The age bands provide representative maths topics. Topic timing varies by school and subject level. [MOE early numeracy](https://nel.moe.edu.sg/la/numeracy/overview/) · [MOE primary maths](https://www.moe.gov.sg/-/media/files/primary/2021-primary-mathematics-syllabus-p1-to-p6-updated-october-2025.pdf) · [MOE G2/G3 secondary maths](https://www.moe.gov.sg/-/media/files/secondary/fsbb/syllabus/2020-g2-and-g3-mathematics-syllabuses.pdf)
 
-**Lumi, the player guide.** The browser runs a bounded, rule-based agent. It observes the current mission and check attempts, selects from authored hints and explanations, and uses saved progress to recommend where to resume. It offers help on request or after two unsuccessful checks. When picking a practice puzzle, it favours skills that recently needed retries or hints. The game and guide run offline. Progress stays in the current browser and device. The game code has no analytics or student accounts.
+## Turn a PowerPoint into a game
 
-**Claude, the teacher author.** Open **Teacher workshop** for the standalone Fraction Ferries activity. A teacher can import a reviewed JSON lesson and copy a student link. The command-line author harness can send a chosen teaching excerpt to the Anthropic Messages API, request one specific output tool, validate the arithmetic and retry once if necessary. It needs Node.js 22 or later and an environment variable named `ANTHROPIC_API_KEY`. Set up the key locally. Model access and usage charges depend on the teacher’s Anthropic account. Send a teaching excerpt that is suitable for external processing and contains no student personal details. [Claude Messages API](https://platform.claude.com/docs/en/api/http/messages)
+1. Open [Teacher Workshop](https://mingyucao111.github.io/number-islands/workshop.html) and choose a text-based PowerPoint `.pptx`, or use the four-slide sample written with Claude.
+2. The browser reads the slides and builds up to six missions covering supported examples. Review the proposed maths actions and play the voyage.
+3. Copy the student link to share the reviewed mission parameters. The deck and its source text stay on the teacher’s device.
 
-For a quick test, save this excerpt to a file named `lesson.txt` outside the public repository.
+Topics currently supported are counting and small-number addition or subtraction, equivalent fractions, rectangular area, and single-variable linear equations. Older `.ppt` files can be saved as `.pptx` in PowerPoint. Export editable maths text when slides only contain screenshots. Uploaded macros and external slide links are never run.
 
-> Compare equal-sized wholes. Show one third in ninths. Show four sixths in ninths.
+The instant path uses deterministic maths templates. On compatible desktop Chrome, the workshop also supports Gemini Nano through the browser’s on-device Prompt API. Its results pass through a task allowlist, bounds and maths validation. If the model is unavailable or returns unusable output, the workshop runs the instant path. [Chrome Prompt API](https://developer.chrome.com/docs/ai/prompt-api)
+
+For teachers with their own Anthropic API access, the earlier Claude-based fraction author is still available with Node.js 22. The CLI only sends a deliberately selected teaching excerpt and requests one output tool. It validates every fraction before printing JSON that can be pasted into the [classic fraction editor](https://mingyucao111.github.io/number-islands/fraction-ferries.html). [Claude Messages API](https://platform.claude.com/docs/en/api/http/messages)
 
 ```sh
 node scripts/author-lesson.mjs /path/to/lesson.txt > lesson.generated.json
 ```
 
-Review the output, then paste it into **Teacher setup → Lesson JSON → Load and play lesson**. You can also paste this checked example generated by Claude.
+## Install and test
 
-```json
-[
-  { "numerator": 1, "denominator": 3, "splitInto": 9 },
-  { "numerator": 4, "denominator": 6, "splitInto": 9 }
-]
-```
-
-The **Student link** carries the fraction parameters. Links from the hosted demo can be shared. A link under `file:` opens on the machine that has the same local file.
-
-## Test and publish
+Open `index.html` to play locally, or use the live link above. On an eligible browser, install the web app from the browser menu. For iOS, Android and signed native builds, see [Mobile setup](MOBILE.md).
 
 ```sh
 node --test
 ```
 
-The test suite checks chapter data, replay generation, the guide’s allowed actions, and the author harness against mocked provider replies. GitHub Actions runs it on pushes and pull requests. The game uses relative static assets and no build step. Configure GitHub Pages to publish from `main` and `/(root)` for the public demo. [GitHub Pages setup](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+Tests cover curriculum bounds, Lumi’s policy, the harbour economy, arcade generators, PPTX decoding, local lesson generation and mocked model responses. The public game and player progress use local browser storage and have no student accounts or analytics. The repository uses GitHub Pages with no web build step.

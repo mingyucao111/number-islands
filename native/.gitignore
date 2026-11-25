@@ -1,0 +1,10 @@
+/node_modules/
+/www/
+/.web-build-*/
+/ios/
+/android/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+.env*

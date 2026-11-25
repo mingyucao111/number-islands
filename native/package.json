@@ -1,0 +1,24 @@
+{
+  "name": "number-islands-native",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "prepare:web": "node scripts/prepare-web.mjs",
+    "ios:init": "npm run prepare:web && cap add ios --packagemanager SPM",
+    "android:init": "npm run prepare:web && cap add android",
+    "ios:sync": "npm run prepare:web && cap sync ios",
+    "android:sync": "npm run prepare:web && cap sync android",
+    "ios:open": "cap open ios",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
+}

@@ -1,0 +1,202 @@
+.iq-quest {
+  --iq-gold: #ffda95;
+  --iq-paper: #f7ead4;
+  --iq-dim: #adc3c3;
+  width: min(100%, 860px);
+  margin: 0 auto;
+  padding-bottom: 2.8rem;
+  color: #fff7ea;
+}
+.iq-quest [hidden] { display: none; }
+.iq-back {
+  min-height: 44px;
+  color: var(--iq-dim);
+  border: 0;
+  background: transparent;
+  padding: .3rem .2rem;
+  font: inherit;
+  cursor: pointer;
+}
+.iq-title { margin: .45rem 0 .25rem; font-size: clamp(2rem, 6vw, 3.4rem); line-height: 1.02; }
+.iq-moves {
+  display: inline-block;
+  margin: .4rem 0;
+  padding: .2rem .6rem;
+  border: 1px solid #4e707a;
+  border-radius: 1rem;
+  color: #bcd2d2;
+  font-size: .85rem;
+}
+.iq-intro, .iq-status, .iq-inventory { margin: .65rem 0; line-height: 1.5; }
+.iq-intro { color: var(--iq-dim); max-width: 62ch; }
+.iq-status { color: var(--iq-gold); min-height: 1.5rem; }
+.iq-inventory { color: #c4d6d5; font-size: .9rem; }
+.iq-journal, .iq-mechanism, .iq-win {
+  margin: .8rem 0;
+  padding: .8rem 1rem;
+  border: 1px solid #536d67;
+  border-radius: .8rem;
+  background: #173841;
+}
+.iq-journal { color: var(--iq-paper); background: #423c33; border-color: #786d57; }
+.iq-journal strong, .iq-win strong { color: var(--iq-gold); }
+.iq-journal p, .iq-win p { margin: .35rem 0 .2rem; line-height: 1.45; }
+
+.iq-cabin, .iq-vault {
+  position: relative;
+  border: 1px solid #a8754b;
+  border-radius: 1rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+.iq-cabin {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .35rem .5rem;
+  padding: clamp(.6rem, 2.5vw, 1.25rem);
+  background:
+    linear-gradient(90deg, #2b1c16bb, transparent 17% 83%, #2b1c16bb),
+    repeating-linear-gradient(90deg, #432d25 0 7px, #50342a 7px 44px, #54372b 44px 48px);
+  box-shadow: inset 0 0 3rem #1e100fcf;
+}
+.iq-cabin::before {
+  position: absolute;
+  inset: .1rem;
+  z-index: -1;
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(25% - 8px), #b7804d 0 calc(25% - 4px), #63422d 0 25%);
+  content: "";
+}
+.iq-object {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: .25rem;
+  min-width: 44px;
+  min-height: 68px;
+  margin: 0 auto;
+  width: min(100%, 6.5rem);
+  padding: .25rem;
+  border: 1px solid transparent;
+  border-radius: .6rem;
+  background: transparent;
+  color: #fff7eb;
+  cursor: pointer;
+}
+.iq-object:hover, .iq-object:focus-visible { background: #7d634467; border-color: #ffce7d; }
+.iq-object[aria-pressed="true"] { border-color: #ffce7d; background: #765432; }
+.iq-object:focus-visible, .iq-hotspot:focus-visible, .iq-back:focus-visible { outline: 2px solid #ffe597; outline-offset: 2px; }
+.iq-object.iq-found { opacity: .34; }
+.iq-object:disabled { cursor: default; }
+.iq-prop-icon {
+  font-size: clamp(1.35rem, 4vw, 2.3rem);
+  line-height: 1;
+  text-shadow: 0 4px 6px #1e130ee5;
+}
+.iq-object-flag .iq-prop-icon { transform: rotate(-11deg); }
+.iq-object-shell .iq-prop-icon { transform: rotate(12deg); }
+.iq-tally {
+  display: grid;
+  grid-template-columns: repeat(4, 4px);
+  gap: 3px;
+  align-content: center;
+  justify-content: center;
+  min-height: 17px;
+  padding: 2px 4px;
+  background: #2c201b;
+  border-radius: 4px;
+}
+.iq-tally i { width: 4px; height: 4px; border-radius: 50%; background: #ffd592; }
+
+.iq-vault {
+  min-height: 235px;
+  display: grid;
+  grid-template: repeat(2, 1fr) / repeat(6, minmax(0, 1fr));
+  gap: .45rem;
+  padding: .65rem;
+  background:
+    radial-gradient(ellipse at 30% 30%, #69858544, transparent 65%),
+    repeating-linear-gradient(0deg, #1b303a 0 21px, #28434e 21px 22px, #283f49 22px 45px, #47616a 45px 47px);
+  border-color: #62858b;
+}
+.iq-vault::before {
+  position: absolute;
+  right: 25%;
+  bottom: 0;
+  left: 11%;
+  height: 52%;
+  background: linear-gradient(90deg, #241913, #896342 15%, #6b4732 85%, #261c17);
+  clip-path: polygon(5% 0, 100% 0, 92% 90%, 0 100%);
+  content: "";
+  z-index: -1;
+}
+.iq-hotspot {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  justify-self: center;
+  align-content: center;
+  min-height: 54px;
+  min-width: 44px;
+  width: min(100%, 8rem);
+  padding: .28rem .2rem;
+  border: 1px solid #b1a27770;
+  border-radius: .65rem;
+  background: #273d3d;
+  color: #fff6e5;
+  font: inherit;
+  font-size: clamp(.72rem, 2.5vw, .9rem);
+  cursor: pointer;
+}
+.iq-hotspot:hover { background: #426267; border-color: #f3cf8d; }
+.iq-hotspot-symbol { font-size: clamp(1.1rem, 3.9vw, 2rem); line-height: 1.1; }
+.iq-hotspot-window { grid-area: 1 / 1 / 2 / 3; border-radius: 50%; background: #174c60; border: 4px double #a28d63; }
+.iq-hotspot-buoy { grid-area: 1 / 3 / 2 / 5; }
+.iq-hotspot-hatch { grid-area: 1 / 5 / 3 / 7; min-height: 92px; background: #493b33; border: 3px double #d8b987; }
+.iq-hotspot-chart { grid-area: 2 / 1 / 3 / 3; transform: rotate(-3deg); }
+.iq-hotspot-locker { grid-area: 2 / 3 / 3 / 5; }
+.iq-vault[data-escaped="true"] .iq-hotspot-hatch { background: #446541; }
+
+.iq-mechanism h2 { margin: 0 0 .45rem; font-size: 1.2rem; }
+.iq-mechanism .button, .iq-win .button { min-height: 44px; min-width: 44px; }
+.iq-tray {
+  width: min(100%, 14rem);
+  min-height: 3rem;
+  display: grid;
+  place-items: center;
+  margin: .4rem 0;
+  border: 1px solid #8faca8;
+  border-bottom: 5px solid #5e9692;
+  border-radius: 0 0 .8rem .8rem;
+  background: #244b54;
+  color: var(--iq-paper);
+}
+.iq-scale { margin: .3rem 0 .55rem; color: var(--iq-dim); }
+.iq-stock { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0 .7rem; }
+.iq-weight[aria-pressed="true"] { background: #5b5240; color: #ffe8bb; border-color: #ffce7d; }
+.iq-gauges { display: flex; flex-wrap: wrap; gap: .7rem; margin: .55rem 0 .8rem; }
+.iq-wheel {
+  display: grid;
+  justify-items: center;
+  gap: .4rem;
+  min-width: 117px;
+  flex: 1 0 117px;
+  padding: .65rem .5rem;
+  border-radius: .8rem;
+  background: #214753;
+}
+.iq-dial {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 3px dashed #c69a69;
+  background: #27343b;
+  color: #ffcc80;
+  font-size: 1.7rem;
+  transform: rotate(var(--turn, 0deg));
+  transition: transform .14s;
+}
+.iq-wheel-buttons { display: flex; gap: .3rem; }
+.iq-win .button { margin-top: .3rem; }
+@media (prefers-reduced-motion: reduce) { .iq-dial { transition: none; } }

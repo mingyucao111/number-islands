@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.mingyucao111.numberislands",
+  "appName": "Number Islands",
+  "webDir": "www",
+  "loggingBehavior": "none",
+  "server": {
+    "androidScheme": "https"
+  }
+}

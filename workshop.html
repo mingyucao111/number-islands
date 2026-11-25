@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Turn a maths PowerPoint into playable Number Islands missions.">
+  <title>Lesson Workshop · Number Islands</title>
+  <link rel="stylesheet" href="islands.css">
+  <link rel="stylesheet" href="harbour.css">
+  <script defer src="deck-reader.js"></script>
+  <script defer src="lesson-agent.js"></script>
+  <script defer src="workshop.js"></script>
+  <meta name="theme-color" content="#102b34">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script defer src="pwa.js"></script>
+</head>
+<body>
+  <header class="masthead"><div class="site-width masthead-inner">
+    <a class="wordmark" href="index.html"><span aria-hidden="true">✦</span> Number Islands</a>
+    <a class="nav-link" href="harbour.html">My harbour</a>
+  </div></header>
+  <main class="site-width workshop">
+    <section class="studio-hero">
+      <p class="overline">Teacher workshop</p>
+      <h1>Make a lesson<br>worth playing.</h1>
+      <p>Choose a maths PowerPoint. Preview the island missions it creates, then send a playable link to your class.</p>
+    </section>
+    <div class="studio-layout">
+      <section class="studio-panel" aria-labelledby="deck-title">
+        <h2 id="deck-title">Choose a PowerPoint</h2>
+        <label id="drop-zone" class="deck-drop" for="deck-file">
+          <span class="deck-icon" aria-hidden="true">↥</span>
+          <strong>Choose a .pptx file</strong>
+          <span>or drop it here</span>
+          <input type="file" id="deck-file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+        </label>
+        <p class="studio-note">Text-based slides for counting and addition, equivalent fractions, rectangle area or linear equations. Your file is read on this device.</p>
+        <div class="button-row">
+          <button type="button" class="button ghost" id="sample">Use the sample slides</button>
+          <a class="plain-link" href="samples/harbour-maths.pptx" download>Download sample</a>
+        </div>
+        <details class="studio-details">
+          <summary>More authoring options</summary>
+          <p id="ai-state">Checking for on-device AI…</p>
+          <button type="button" class="button ghost" id="ai-generate" disabled>Generate with browser AI</button>
+          <a class="plain-link" href="fraction-ferries.html">Classic fraction editor</a>
+        </details>
+        <p class="studio-status" id="upload-status" role="status">Waiting for slides.</p>
+      </section>
+      <section class="studio-panel result-panel" aria-labelledby="mission-title">
+        <h2 id="mission-title">Mission preview</h2>
+        <p id="empty-missions" class="studio-note">Generated missions will appear here for review.</p>
+        <div id="mission-preview" hidden>
+          <p class="preview-title" id="preview-title"></p>
+          <p class="studio-note" id="engine-status"></p>
+          <ol class="lesson-missions" id="mission-list"></ol>
+          <div class="button-row">
+            <a class="button cta" id="play-lesson">Play missions →</a>
+            <button type="button" class="button ghost" id="copy-link">Copy student link</button>
+          </div>
+          <label for="student-link" class="studio-note">Student link</label>
+          <input type="url" id="student-link" readonly>
+          <p class="studio-status" id="share-status" role="status"></p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -174,3 +174,13 @@ test("the coach prefers a puzzle type that needed help and bounds unsuccessful s
   assert.equal(agent.practiceMission(chapter, random, { build: 2 }).kind, "grid");
   assert.equal(calls, 7);
 });
+
+test("supported and stretch practice draw different complexity within the same mechanic", () => {
+  const sizes = [7, 4, 12, 8, 14, 5, 10];
+  function choose(tier) {
+    let index = 0;
+    return agent.practiceMission({ practice: () => ({ kind: "build", target: sizes[index++] }) }, Math.random, { build: 1 }, tier);
+  }
+  assert.equal(choose("support").target, 4);
+  assert.equal(choose("stretch").target, 14);
+});
