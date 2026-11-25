@@ -1,0 +1,502 @@
+/* The voyage map is one illustrated landscape, with islands as the controls. */
+#view > .hero {
+  --map-forest: #234936;
+  --map-fern: #40694c;
+  min-height: 27rem;
+  grid-template-columns: .92fr 1.08fr;
+  margin: .65rem 0 0;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  color: var(--map-forest);
+  background: radial-gradient(ellipse at 68% 54%, #f4f5d2 0%, #edf4df 38%, #eff5e700 72%);
+}
+
+#view .hero-copy {
+  padding: clamp(2.2rem, 4vw, 3.45rem) .65rem clamp(2.2rem, 4vw, 3.45rem) clamp(.3rem, 2.5vw, 2rem);
+}
+
+#view .hero-copy .overline {
+  color: #456b50;
+  letter-spacing: .14em;
+}
+
+#view .hero h1 {
+  margin: .75rem 0 1.1rem;
+  font: 700 clamp(4rem, 9.5vw, 8.1rem)/.78 Georgia, "Times New Roman", serif;
+  letter-spacing: -.078em;
+  color: var(--map-forest);
+}
+
+#view .hero h1 span {
+  color: #b77a36;
+}
+
+#view .hero-copy > p:not(.overline) {
+  max-width: 26rem;
+  font-size: clamp(1rem, 1.7vw, 1.12rem);
+  color: #456250;
+}
+
+#view .hero .button-row {
+  margin-top: 1.35rem;
+  gap: .7rem;
+}
+
+#view .hero .button,
+#view .arcade-sign .button,
+#view .beacon-box .button {
+  border-radius: 2rem;
+  min-height: 44px;
+}
+
+#view .hero .cta,
+#view .beacon-box .cta {
+  background: #355f46;
+  border-color: #355f46;
+  color: #fffbed;
+  box-shadow: 0 3px 0 #28523d22;
+}
+
+#view .hero .cta:hover,
+#view .beacon-box .cta:hover {
+  background: #284d39;
+}
+
+#view .hero .ghost,
+#view .arcade-sign .ghost {
+  background: transparent;
+  color: #31583f;
+  border-color: #9bb39a;
+}
+
+#view .hero .ghost:hover,
+#view .arcade-sign .ghost:hover {
+  background: #e3eed9;
+}
+
+#view .sea-art {
+  min-height: 25rem;
+  margin: 0;
+  background: none;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+#view .sea-art::before {
+  position: absolute;
+  inset: 6% 1% 3% 4%;
+  border-radius: 43% 57% 46% 54% / 58% 43% 57% 42%;
+  background:
+    radial-gradient(ellipse at 90% 14%, #fcf3dc 0%, #f1eed5 30%, #dbe9cd 58%, #bfcf9a 108%);
+  content: "";
+}
+
+#view .art-moon {
+  top: 14%;
+  right: 19%;
+  width: 12.8cqw;
+  border: 1px solid #e0b56c;
+  background: radial-gradient(circle at 38% 32%, #fff3c9, #f6d596 75%, #e9b870);
+  box-shadow: 0 0 5cqw #fff3d77a;
+}
+
+#view .art-stars {
+  top: 25%;
+  left: 16%;
+  width: 11cqw;
+  height: 2.2cqw;
+  border-radius: 50%;
+  background: #fffcebba;
+  box-shadow: 4cqw -2cqw 0 -.35cqw #fffcebad, 22cqw 9cqw 0 -.45cqw #fffceba5, 51cqw 12cqw 0 -.25cqw #fffcebb0;
+}
+
+#view .far-islet {
+  left: 5%;
+  bottom: 29%;
+  width: 42%;
+  height: 14%;
+  border-radius: 69% 72% 42% 48% / 89% 67% 36% 27%;
+  opacity: .92;
+  background: linear-gradient(170deg, #a1bb83, #719a77);
+  box-shadow: 1px 7px 0 #577f694d, 4px 14px 0 #7ea58d36;
+}
+
+#view .far-islet::before {
+  position: absolute;
+  left: 20%;
+  bottom: 52%;
+  width: 54%;
+  height: 89%;
+  background: #82a77f;
+  clip-path: polygon(0 100%, 12% 70%, 15% 80%, 29% 29%, 40% 74%, 50% 48%, 58% 68%, 64% 41%, 74% 78%, 87% 64%, 100% 100%);
+  content: "";
+}
+
+#view .near-islet {
+  left: 29%;
+  bottom: 19%;
+  width: 65%;
+  height: 25%;
+  border-radius: 57% 65% 35% 32% / 59% 74% 40% 28%;
+  transform: rotate(-4deg);
+  background: linear-gradient(161deg, #b1c779 1%, #759c65 46%, #416f54 90%);
+  box-shadow: 3px 7px 0 #37694f, 6px 14px 0 #638d699f, 12px 19px 0 #90ad7d85;
+}
+
+#view .near-islet::after {
+  position: absolute;
+  inset: 5% 5% 25% 4%;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 20% 66%, #cee09593 0 12%, transparent 13%),
+    radial-gradient(ellipse at 42% 41%, #a7c66d 0 12%, transparent 13%),
+    radial-gradient(ellipse at 72% 54%, #abd28267 0 14%, transparent 15%),
+    radial-gradient(ellipse at 88% 69%, #34594177 0 11%, transparent 12%);
+  content: "";
+}
+
+#view .lighthouse {
+  left: 59%;
+  bottom: 35%;
+  width: 17%;
+  height: 36%;
+  transform: rotate(3deg);
+  background: repeating-linear-gradient(-18deg, #ffefd7 0 22%, #bc7153 22% 38%, #ffefd7 38% 57%);
+  filter: drop-shadow(0 2px 2px #16483144);
+}
+
+#view .lighthouse::after,
+#view .lighthouse i {
+  background: #446554;
+}
+
+#view .light-ray {
+  left: 64.1%;
+  top: 29%;
+  width: 6.5%;
+  height: 6%;
+  border: 3px solid #885d42;
+  background: #cfb58a;
+  box-shadow: 0 -13px 0 -5px #a36d4a;
+}
+
+#view .is-lit .light-ray {
+  background: #fff4b4;
+  box-shadow: 0 -13px 0 -5px #a36d4a, 0 0 25px #ffe294;
+}
+
+#view .art-waves {
+  left: 5%;
+  bottom: 7%;
+  width: 97%;
+  height: 29%;
+  background: repeating-linear-gradient(-10deg, transparent 0 14px, #457d7140 15px 16px, transparent 17px 26px);
+}
+
+#view .art-boat {
+  left: 19%;
+  bottom: 17%;
+  width: 12.7%;
+  height: 3%;
+  transform: rotate(-5deg);
+  background: #b66e3d;
+  box-shadow: 0 4px 0 #477d6a4d;
+}
+
+#view .art-boat::before {
+  left: 24%;
+  width: 53%;
+  height: 7.8cqw;
+  background: #fff4d9;
+}
+
+#view .arcade-sign {
+  margin: .35rem 0 0;
+  padding: .75rem .1rem;
+  border: 0;
+  border-top: 1px solid #b9c9ad;
+  border-bottom: 1px solid #cbd7c2;
+  border-radius: 0;
+  background: transparent;
+  color: #2f553f;
+}
+
+#view .arcade-sign h2,
+#view .section-heading h2,
+#view .beacon-box h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  color: #244a36;
+  letter-spacing: -.04em;
+}
+
+#view .arcade-sign p,
+#view .section-heading p,
+#view .beacon-box p {
+  color: #526d59;
+}
+
+#view .route-section {
+  margin-top: clamp(1.7rem, 3vw, 2.45rem);
+}
+
+#view .route-section .section-heading {
+  gap: .8rem;
+  margin-bottom: .15rem;
+}
+
+#view .section-heading h2 {
+  font-size: clamp(2rem, 4.4vw, 3.4rem);
+  line-height: 1.05;
+}
+
+#view .route-section .parts-total {
+  color: #805a31 !important;
+  font-size: .93rem;
+  padding-bottom: .2rem;
+}
+
+#view .island-grid {
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(.35rem, 1vw, .9rem);
+  padding: 2.25rem .4rem 1.65rem;
+  background: radial-gradient(ellipse at 56% 34%, #ccdfb477 0%, #dce9ce5c 42%, transparent 72%);
+}
+
+#view .island-grid::before,
+#view .island-grid::after {
+  position: absolute;
+  z-index: -1;
+  right: 8%;
+  left: 8%;
+  border: 2px dashed #749988aa;
+  border-right-color: transparent;
+  border-left-color: transparent;
+  pointer-events: none;
+  content: "";
+}
+
+#view .island-grid::before {
+  top: 33%;
+  height: 32%;
+  border-bottom: 0;
+  border-radius: 52% 38% 0 0;
+  transform: rotate(-4deg);
+}
+
+#view .island-grid::after {
+  top: 17%;
+  height: 43%;
+  border-top: 0;
+  border-radius: 0 0 50% 40%;
+  transform: rotate(3deg);
+}
+
+#view .island-card {
+  --shore-top: #b6c886;
+  --shore-mid: #81a96a;
+  --shore-deep: #437b60;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  color: #274834;
+}
+
+#view .island-card:nth-child(2),
+#view .island-card:nth-child(5) { padding-top: 1.1rem; }
+#view .island-card:nth-child(3) { padding-top: 2.1rem; }
+#view .island-card:nth-child(6) { padding-top: 1.8rem; }
+
+#view .island-card[data-theme="sun"] {
+  --shore-top: #f0d292;
+  --shore-mid: #c4b778;
+  --shore-deep: #819367;
+}
+#view .island-card[data-theme="water"] {
+  --shore-top: #b2d7b7;
+  --shore-mid: #75a88f;
+  --shore-deep: #4d8874;
+}
+#view .island-card[data-theme="coral"] {
+  --shore-top: #e6ca99;
+  --shore-mid: #bcad74;
+  --shore-deep: #8f9363;
+}
+#view .island-card[data-theme="iris"] {
+  --shore-top: #bfceb3;
+  --shore-mid: #8dac9e;
+  --shore-deep: #527c6d;
+}
+#view .island-card[data-theme="rose"] {
+  --shore-top: #e8cfab;
+  --shore-mid: #c0aa84;
+  --shore-deep: #9b8b64;
+}
+
+#view .island-card button {
+  min-height: 115px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .2rem;
+  padding: .25rem .18rem;
+  border-radius: 1.2rem;
+  text-align: center;
+}
+
+#view .island-card button:hover,
+#view .island-card button:focus-visible {
+  background: transparent;
+}
+
+#view .island-card button:focus-visible {
+  outline: 3px solid #517c59;
+  outline-offset: 2px;
+}
+
+#view .island-card .island-icon {
+  isolation: isolate;
+  position: relative;
+  width: clamp(4.8rem, 10vw, 7.1rem);
+  height: 4.15rem;
+  margin: 0 0 .3rem;
+  background: none;
+  font-size: clamp(1.6rem, 3.3vw, 2.15rem);
+  line-height: 1;
+  padding-bottom: .55rem;
+  transform: translateY(0);
+  transition: transform .18s ease-out;
+  filter: drop-shadow(0 3px 1px #426b4429);
+}
+
+#view .island-card button:hover .island-icon,
+#view .island-card button:focus-visible .island-icon {
+  transform: translateY(-4px) rotate(-3deg);
+}
+
+#view .island-card .island-icon::before {
+  position: absolute;
+  z-index: -1;
+  left: 4%;
+  right: 4%;
+  bottom: 10%;
+  height: 53%;
+  border-radius: 59% 61% 45% 35% / 86% 81% 42% 39%;
+  transform: rotate(-7deg);
+  background: radial-gradient(ellipse at 38% 21%, var(--shore-top) 15%, var(--shore-mid) 66%, var(--shore-deep) 102%);
+  box-shadow: 2px 4px 0 var(--shore-deep), 4px 8px 0 #78ab913f;
+  content: "";
+}
+
+#view .island-card:nth-child(even) .island-icon::before {
+  transform: rotate(8deg);
+  border-radius: 62% 53% 41% 47% / 79% 88% 31% 36%;
+}
+
+#view .island-card .island-meta {
+  color: #4c6c53;
+  font-size: .74rem;
+}
+
+#view .island-card .island-name {
+  margin: 0;
+  color: #234735;
+  font: 700 clamp(.92rem, 1.5vw, 1.19rem)/1.15 Georgia, "Times New Roman", serif;
+  letter-spacing: -.025em;
+}
+
+#view .island-card button:hover .island-name {
+  text-decoration: underline;
+  text-underline-offset: .21em;
+}
+
+#view .island-card .island-progress {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .19rem;
+  color: #566f5b;
+  font-size: .74rem;
+}
+
+#view .island-card .island-progress i {
+  width: .32rem;
+  height: .32rem;
+  background: #bacbb1;
+}
+
+#view .island-card .island-progress i.done {
+  background: #517852;
+}
+
+#view .island-card .island-progress span {
+  margin: 0 0 0 .16rem;
+}
+
+#view .beacon-box {
+  margin: .1rem 0;
+  padding: 1rem 0;
+  border: 0;
+  border-top: 1px solid #cbd7c2;
+  border-bottom: 1px solid #cbd7c2;
+  border-radius: 0;
+  background: none;
+}
+
+#view .beacon-box .beacon-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #f4ddb17d;
+  color: #956326;
+}
+
+#view .map-footer {
+  color: #516b59;
+  padding-inline: .1rem;
+}
+
+#view .map-footer a:hover {
+  color: #78532c;
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  #view > .hero { min-height: 25rem; }
+  #view .sea-art { min-height: 23rem; }
+  #view .island-card .island-progress i { display: none; }
+}
+
+@media (max-width: 720px) {
+  #view > .hero { grid-template-columns: 1fr; min-height: 0; margin-top: .25rem; }
+  #view .hero h1 { font-size: clamp(3.6rem, 12vw, 5.5rem); line-height: .93; }
+  #view .hero-copy { padding: 1.55rem .3rem .45rem; }
+  #view .hero-copy > p:not(.overline) { max-width: 29rem; }
+  #view .sea-art { min-height: clamp(11rem, 49vw, 20rem); max-width: 34rem; width: 100%; margin: 0 auto; }
+  #view .sea-art::before { inset: 4% 1% 4%; }
+  #view .island-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 1.6rem .1rem 1.1rem; gap: .45rem .22rem; }
+  #view .island-grid::before { top: 24%; height: 24%; }
+  #view .island-grid::after { top: 61%; height: 15%; }
+  #view .island-card:nth-child(n) { padding-top: 0; }
+  #view .island-card:nth-child(3n-1) { padding-top: .8rem; }
+  #view .island-card button { min-height: 103px; }
+  #view .island-card .island-icon { height: 3.5rem; }
+  #view .island-card .island-progress i { display: none; }
+}
+
+@media (max-width: 410px) {
+  #view .hero .button-row { margin-top: .95rem; gap: .42rem; }
+  #view .hero .button { padding-inline: .67rem; font-size: .87rem; }
+  #view .hero-copy > p:not(.overline) { font-size: .95rem; }
+  #view .arcade-sign { gap: .45rem; }
+  #view .arcade-sign p { font-size: .9rem; }
+  #view .route-section .section-heading { gap: .33rem; }
+  #view .island-card .island-icon { min-width: 3.85rem; }
+  #view .map-footer { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #view .island-card .island-icon { transition: none; }
+}

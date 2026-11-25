@@ -8,7 +8,7 @@ const output = join(nativeRoot, "www");
 
 // The native bundle ships public game resources only. Keep this list in sync with the web release.
 const files = [
-  "index.html", "islands.css", "islands.js", "agent.js",
+  "index.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "island-quests.js", "quests.css",
   "harbour.html", "harbour.css", "harbour-game.js", "harbour-rules.js",

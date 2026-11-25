@@ -7,8 +7,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#102b34",
-  "theme_color": "#102b34",
+  "background_color": "#edf4e4",
+  "theme_color": "#edf4e4",
   "categories": ["education", "games"],
   "icons": [
     { "src": "icons/islands-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

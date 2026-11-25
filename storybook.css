@@ -1,0 +1,150 @@
+:root {
+  color-scheme: light;
+  --ink: #234438;
+  --muted: #496350;
+  --sea: #dcebd7;
+  --deep: #edf4e4;
+  --panel: #f7f8ec;
+  --line: #b9c9ae;
+  --gold: #e9bd65;
+  --mint: #3e7055;
+  --book: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  background: #edf4e4;
+  color: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 94% 4%, #cadfc2 0, transparent 37rem),
+    radial-gradient(ellipse at 2% 42%, #f8f4d9 0, transparent 26rem),
+    linear-gradient(170deg, #eff5e7 0%, #edf4e4 53%, #e3edd5 100%);
+}
+
+:focus-visible { outline-color: #6d4e86; }
+.masthead { border-bottom-color: #b3c3a6; background: #f1f6e8ad; }
+.wordmark { color: #204935; font-family: var(--book); font-size: clamp(.98rem, 2vw, 1.3rem); white-space: nowrap; }
+.wordmark span { color: #88611f; }
+.nav-link { color: #355646; }
+.nav-link:hover, .map-footer a:hover { color: #7a4f23; }
+.overline { color: #34674b; letter-spacing: .115em; }
+.button { border-radius: 999px; color: #234438; }
+.button.cta { background: #e9bd65; color: #392b19; border-color: #c89849; }
+.button.cta:hover { background: #f5cf83; }
+.button.ghost { background: #f3f6e9; color: #254b38; border-color: #a9ba9e; }
+.button.ghost:hover { background: #dce9d3; }
+.ghost-link, .plain-link { color: #355b46; }
+.button:disabled { opacity: .62; }
+
+.arcade-sign { border: 0; border-top: 1px solid #aaba9e; border-radius: 0; background: transparent; padding: 1.15rem 0; }
+.arcade-sign h2 { font-family: var(--book); font-size: 1.65rem; color: #294c39; }
+.arcade-sign p, .map-footer { color: #486751; }
+
+.screen-title, .studio-hero h1, .harbour-title, .arcade-hero h1, .duel-panel h1 {
+  font-family: var(--book);
+  font-weight: 800;
+  letter-spacing: -.045em;
+}
+.screen-header { align-items: flex-start; }
+.screen-header .island-icon { background: #dce8d0; }
+.story-line { color: #45624c; }
+.mission-list { gap: 0; border-top: 1px solid #aabfa3; }
+.mission-list li { border-bottom: 1px solid #b8c9ac; }
+.mission-button { border: 0; border-radius: 0; background: transparent; color: #244638; }
+.mission-button:hover:enabled { background: #deead5; }
+.mission-button:disabled { opacity: .67; }
+.mission-button .tag, .coach-recommendation { color: #4d6854; }
+.mission-button .mission-number { background: #dce9d0; color: #284d38; }
+.play-panel { border-color: #beccab; background: #fcf9eb; box-shadow: 0 12px 34px -23px #305240; }
+.play-panel .button.ghost, .harbour-task .button.ghost { border-radius: 12px; background: #f7f8ed; }
+.play-panel .button.cta, .harbour-task .button.cta { border-color: #39765b; background: #39765b; color: white; }
+.play-panel .button.cta:hover, .harbour-task .button.cta:hover { background: #285d45; }
+.activity { border-color: #c4d1b7; background: #e8efe1; }
+.guide { background: #f6ead0; border-inline-start: 4px solid #d3ad62; }
+.play-panel .choices .button, .harbour-task .helm .button { min-height: 44px; }
+
+.workshop, .harbour, .arcade { padding-top: clamp(1.2rem, 4vw, 2.4rem); }
+.studio-hero h1 { color: #1f493b; }
+.studio-hero > p:last-child { color: #45634f; }
+.studio-layout { gap: clamp(1rem, 4vw, 2.8rem); border-top: 1px solid #b7c6ac; }
+.studio-panel { padding: 1.3rem 0; border: 0; border-radius: 0; background: transparent; }
+.result-panel { border-inline-start: 1px solid #b7c6ac; padding-inline-start: clamp(.9rem, 3vw, 2.4rem); }
+.studio-panel h2, .harbour h2, .arcade-card h2 { color: #284b38; font-family: var(--book); letter-spacing: -.026em; }
+.deck-drop { background: #e1ecd2; border: 2px dashed #83a084; border-radius: 18px; color: #234438; }
+.deck-drop:hover, .deck-drop.drag-over { background: #d5e8ce; border-color: #6f8b71; }
+.deck-drop span:not(.deck-icon), .studio-note, .studio-details p { color: #48634e; }
+.deck-icon { background: #f3dc9a; color: #503c25; }
+.studio-status, .preview-title { color: #385a40; }
+.studio-details { border-top-color: #b3c4a7; }
+#student-link { background: #f7f9ef; color: #284c3b; border-color: #a4b69a; }
+
+.port-banner { border: 0; min-height: 240px; border-radius: 33% 17% 19% 25% / 17% 10% 19% 16%;
+  background: linear-gradient(145deg, #d9e5ba, #b6d4b8 54%, #a3c9b4 100%); }
+.port-banner p:not(.overline) { color: #2c573f; }
+.port-art { opacity: .92; }
+.port-art .port-sun { background: #fff0bd; box-shadow: 0 0 40px #fff3c9b3; }
+.port-art .port-dock { background: #a67852; }
+.port-art .port-hut { background: #dd9d6c; }
+.stat-chip { padding: .5rem .72rem; background: transparent; border-color: #a9bc9e; color: #355a42; }
+.stat-chip:first-child { color: #634719; background: #f8ebbe; border-color: #d4bc80; }
+.harbour-board { gap: clamp(1rem, 5vw, 3.2rem); }
+.port-card { padding: .9rem 0; border: 0; border-top: 1px solid #aabfa1; border-radius: 0; background: transparent; }
+.port-card p { color: #42614c; }
+.port-card .overline { color: #4b6b49; }
+.port-message { color: #546b44; }
+#difficulty { background: #f0f6e8; border-color: #a4b79a; color: #2e513a; }
+.harbour-task { background: #fcfaed; color: #244235; border-color: #b8cba9; }
+.loading-box { background: #edf3e4; }
+.hold-slots { background: #88b39a; }
+.hold-slots button { background: #f4d58e; }
+.ship-chart { background: #76a391; }
+.ship-chart span { background: #aed0b9; color: #3d6b5d; }
+.ship-chart .reef { background: #72947a; color: #233f36; }
+.ship-chart .pier { background: #e9b96c; }
+.ship-chart .ship { background: #dce8b3; border-color: #557b62; }
+
+.arcade-hero { border: 0; background: radial-gradient(ellipse at 83% 25%, #fff3bd 0%, transparent 18%),
+  linear-gradient(120deg, #dce8c9, #b8d1b4 69%, #9ebd9d);
+  border-radius: 32% 15% 20% 19% / 21% 14% 18% 12%; min-height: 170px; align-items: center; }
+.arcade-hero p:last-child { color: #396048; }
+.arcade-art { color: #557e52; background: none; }
+.arcade-grid { display: block; max-width: 820px; margin: 1rem auto 0; }
+.arcade-card, .arcade-card[data-mode] { border: 0; border-bottom: 1px solid #acbfa5; background: transparent; border-radius: 0; }
+.arcade-card[data-mode] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .15rem 1rem; }
+.arcade-card[data-mode] .arcade-icon { grid-row: 1 / span 2; width: 63px; height: 63px; border-radius: 52% 42% 49% 41%; background: #dcead1; }
+.arcade-card[data-mode="escape"] .arcade-icon { background: #e0e2d4; }
+.arcade-card[data-mode="potion"] .arcade-icon { background: #e8ddef; }
+.arcade-card[data-mode="duel"] .arcade-icon { background: #f3e6b9; }
+.arcade-card[data-mode] h2 { margin: 0; }
+.arcade-card p:not(.overline) { color: #4e6a53; margin: 0; }
+.arcade-card[data-mode] .button { grid-column: 3; grid-row: 1 / span 2; }
+.duel-panel { padding-inline: 0; }
+.duel-panel .button { margin-top: .75rem; }
+.duel-label input { background: #fafbee; color: #294e3c; border-color: #a5b69a; }
+.duel-notice { color: #395c43; }
+.iq-quest { --iq-paper: #466047; --iq-gold: #74521f; --iq-dim: #4e6a53; color: #294a3c; }
+.iq-title, .potion-header h1 { font-family: var(--book); letter-spacing: -.04em; }
+.iq-moves, .iq-inventory { color: #4e6a53; border-color: #a1b795; }
+.iq-journal, .iq-mechanism, .iq-win { background: #e7eddb; border-color: #b2c6a6; }
+.iq-journal { background: #f4ebcb; border-color: #c5b88d; }
+.iq-tray, .iq-wheel { background: #d6e5d3; color: #355844; }
+.iq-back:focus-visible { outline-color: #6d4e86; }
+.potion-screen { --potion-frame: #a18ca9; color: #53385f; background: radial-gradient(ellipse at 90% 5%, #f7edfa, #ddd4eb); }
+.potion-card { background: transparent; border: 0; color: #493659; }
+.potion-card .potion-stage { color: #735222; }
+.potion-card .potion-instruction { color: #5d4768; }
+.potion-card .potion-recipe { color: #543e37; background: #f4e7c5; border-color: #bca884; }
+.potion-lab, .potion-finish { color: #fff1e4; border-color: #9f83ad; }
+.potion-garden li, .potion-garden li.potion-grown { border-radius: 50% 40% 43% 41% / 50% 54% 46% 50%; }
+.potion-garden li { background: #e9dff0; color: #604c6e; }
+dialog { border: 1px solid #9faf8f; border-radius: 20px; color: #254736; background: #f7f7e9; }
+dialog::backdrop { background: #26433870; }
+
+@media (max-width: 680px) {
+  .result-panel { border-inline-start: 0; border-top: 1px solid #b7c6ac; padding-inline-start: 0; }
+  .studio-layout { gap: 0; }
+  .port-banner { min-height: 195px; }
+  .port-art { opacity: .56; }
+  .arcade-card[data-mode] { grid-template-columns: auto minmax(0, 1fr); gap: .25rem .7rem; }
+  .arcade-card[data-mode] .arcade-icon { grid-row: 1 / span 2; width: 49px; height: 49px; }
+  .arcade-card[data-mode] .button { grid-row: auto; grid-column: 2; justify-self: start; margin: .45rem 0 0; }
+}

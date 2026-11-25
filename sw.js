@@ -1,9 +1,9 @@
 /* Number Islands only caches public, same-origin game assets. */
 const CACHE_PREFIX = "number-islands-shell-";
-const CACHE_NAME = CACHE_PREFIX + "2026-11-25.2";
+const CACHE_NAME = CACHE_PREFIX + "2026-11-25.3";
 const BASE = new URL(self.registration.scope);
 const core = [
-  "index.html", "islands.css", "islands.js", "agent.js",
+  "index.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "manifest.webmanifest", "icons/islands-192.png", "icons/islands-512.png", "icons/apple-touch-icon.png",
 ];
