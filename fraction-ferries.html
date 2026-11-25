@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fraction Ferries · Primary 3 Maths</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: ui-rounded, "Avenir Next", system-ui, sans-serif;
+      color: #113936;
+      background: #e9f2ee;
+      --ink: #113936;
+      --paper: #fffcf5;
+      --teal: #116c61;
+      --yellow: #ffdb82;
+      --line: #c3d8cf;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; }
+    button, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: default; }
+    :focus-visible { outline: 3px solid #8b45bc; outline-offset: 4px; }
+
+    .port {
+      background: #103c38;
+      color: #fffaf0;
+      border-bottom: 5px solid #badeb6;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .port::after {
+      content: "";
+      position: absolute;
+      width: 24rem;
+      height: 24rem;
+      right: max(3%, calc((100% - 900px) / 2));
+      top: -13rem;
+      border: 1px solid #386b61;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2rem #103c38, 0 0 0 calc(2rem + 1px) #386b61,
+        0 0 0 4rem #103c38, 0 0 0 calc(4rem + 1px) #386b61;
+      pointer-events: none;
+    }
+
+    .wrap { width: min(100% - 2rem, 880px); margin-inline: auto; }
+    .port .wrap { padding: 1.5rem 0 1.8rem; position: relative; z-index: 1; }
+    .subject { margin: 0; font-size: .83rem; font-weight: 750; color: #c4e3ce; }
+    h1 { font-size: clamp(2.4rem, 7vw, 4.3rem); line-height: 1; letter-spacing: -.055em; margin: .36rem 0; }
+    .subtitle { margin: .55rem 0 0; color: #e1eee4; }
+    main { padding: 1.35rem 0 2.5rem; }
+    .game, .teacher { border: 1px solid var(--line); border-radius: 22px; background: var(--paper); }
+    .game { padding: clamp(1rem, 4vw, 2.2rem); box-shadow: 0 8px 30px #103c380d; }
+    .game-top, .ferry-head, .controls, .actions { display: flex; align-items: center; gap: .65rem; }
+    .game-top, .ferry-head, .controls { justify-content: space-between; }
+    .trip { margin: 0; color: var(--teal); font-size: .83rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .route { display: flex; gap: .32rem; align-items: center; }
+    .route span { width: .68rem; height: .68rem; border: 1px solid #7d9f90; background: #e3ede6; border-radius: 50%; }
+    .route .current { border: 2px solid var(--teal); background: var(--yellow); }
+    .route .past { border-color: var(--teal); background: var(--teal); }
+    h2 { margin: .55rem 0 .22rem; letter-spacing: -.04em; font-size: clamp(1.65rem, 5vw, 2.55rem); line-height: 1.08; }
+    .direction { margin: .55rem 0 1.25rem; color: #345b53; }
+
+    .docks { background: #e7f3ea; border-radius: 16px; padding: clamp(.7rem, 3vw, 1.3rem); }
+    .ferry + .ferry { margin-top: .75rem; }
+    .ferry-head { margin-bottom: .3rem; }
+    .ferry-head h3 { font-size: 1rem; margin: 0; }
+    .fraction {
+      background: #fff9ed;
+      padding: .18rem .6rem;
+      min-width: 3rem;
+      text-align: center;
+      border: 1px solid #bcd2c7;
+      border-radius: 999px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .deck { display: grid; grid-template-columns: repeat(var(--parts), minmax(0, 1fr)); border: 2px solid #245a50; border-radius: 11px; position: relative; }
+    .deck.show-guide::after {
+      content: "";
+      position: absolute;
+      top: -5px;
+      bottom: -5px;
+      left: var(--guide-position);
+      border-left: 3px dashed #782b68;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .slot {
+      background: #fcfff9;
+      color: #3d6259;
+      height: clamp(3rem, 7vw, 3.8rem);
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      border: 0;
+      font-size: clamp(.68rem, 2vw, .9rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .slot:first-child { border-radius: 9px 0 0 9px; }
+    .slot:last-child { border-radius: 0 9px 9px 0; }
+    .slot + .slot { border-left: 1px solid #568276; }
+    .slot.loaded { color: #163a34; background: repeating-linear-gradient(-45deg, #ffd36a 0 8px, #ffe395 8px 16px); }
+    .slot.reference-loaded { color: white; background: repeating-linear-gradient(-45deg, #116858 0 8px, #1b7664 8px 16px); }
+    button.slot:hover:enabled { box-shadow: inset 0 0 0 3px #116c61; }
+    button.slot:focus-visible { position: relative; z-index: 1; outline-offset: -4px; }
+    .hull { height: .42rem; background: #245a50; border-radius: 0 0 18px 18px; margin-inline: .7rem; }
+    .controls { margin-top: .6rem; color: #345b53; font-size: .88rem; }
+    .stepper { display: flex; gap: .35rem; }
+    .stepper button { width: 44px; height: 44px; border: 1px solid #91b0a4; border-radius: 12px; background: #fcfff9; color: var(--ink); font-size: 1.25rem; }
+    .stepper button:disabled { color: #46685e; background: #e9f0e9; }
+    .actions { margin-top: .95rem; flex-wrap: wrap; }
+    .action {
+      min-height: 44px;
+      padding: .58rem 1rem;
+      color: var(--ink);
+      border: 1px solid #abc8b9;
+      border-radius: 12px;
+      background: #fffdf6;
+      font-weight: 750;
+    }
+    .action:hover { background: #e4f2e8; }
+    .action.primary { background: var(--teal); color: white; border-color: var(--teal); }
+    .action.primary:hover { background: #0e584f; }
+    .feedback { margin: .72rem 0 0; min-height: 1.45em; font-weight: 650; }
+    .feedback[data-kind="retry"] { color: #82441d; }
+    .feedback[data-kind="correct"] { color: #12614c; }
+    .hint { margin: .45rem 0 0; color: #345b53; }
+    #finish { text-align: center; padding: 1.5rem 0; }
+    #finish .trip { margin-bottom: .65rem; }
+    #finish .action { margin-top: .6rem; }
+    .teacher { margin-top: .9rem; padding: .1rem 1rem; }
+    .teacher summary { display: list-item; padding: .8rem .2rem; font-weight: 750; cursor: pointer; }
+    .teacher form { padding: 0 .2rem .75rem; }
+    .teacher p { color: #345b53; margin: .4rem 0 .8rem; }
+    .teacher label { display: block; font-weight: 700; margin-bottom: .35rem; }
+    textarea { display: block; width: 100%; min-height: 8rem; padding: .65rem; border: 1px solid #9ebcad; border-radius: 10px; color: var(--ink); background: white; font-family: ui-monospace, monospace; font-size: .86rem; }
+    #import-status { margin: .65rem 0 0; min-height: 1.25em; }
+    .share { margin-top: .85rem; }
+    .share input { width: 100%; min-height: 44px; padding: .45rem .65rem; border: 1px solid #9ebcad; border-radius: 10px; background: white; color: var(--ink); }
+
+    @media (max-width: 460px) {
+      .wrap { width: calc(100% - 1.1rem); }
+      .port .wrap { padding: 1.2rem .55rem 1.4rem; }
+      main { padding-top: .7rem; }
+      .game, .teacher { border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="port">
+    <div class="wrap">
+      <p class="subject">Primary 3 maths · Equivalent fractions</p>
+      <h1>Fraction Ferries</h1>
+      <p class="subtitle">Same amount of cargo. Different numbers of slots.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="game" aria-label="Game">
+      <div id="play">
+        <div class="game-top">
+          <p class="trip" id="trip"></p>
+          <div class="route" id="route" aria-hidden="true"></div>
+        </div>
+        <h2 id="mission" tabindex="-1">Match the cargo</h2>
+        <p class="direction">The ferries are the same length. Load Ferry B so its cargo reaches as far as Ferry A’s.</p>
+        <div class="docks">
+          <div class="ferry">
+            <div class="ferry-head">
+              <h3>Ferry A</h3>
+              <span class="fraction" id="target-fraction"></span>
+            </div>
+            <div class="deck" id="reference" aria-hidden="true"></div>
+            <div class="hull" aria-hidden="true"></div>
+          </div>
+          <div class="ferry">
+            <div class="ferry-head">
+              <h3>Ferry B</h3>
+              <output class="fraction" id="player-fraction" aria-label="Share of Ferry B loaded"></output>
+            </div>
+            <div class="deck" id="player" role="group" aria-label="Ferry B cargo slots"></div>
+            <div class="hull" aria-hidden="true"></div>
+          </div>
+          <div class="controls">
+            <span>Tap a slot to fill from the left.</span>
+            <div class="stepper" role="group" aria-label="Adjust cargo">
+              <button type="button" id="remove" aria-label="Remove one slot of cargo">−</button>
+              <button type="button" id="add" aria-label="Add one slot of cargo">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="action primary" id="check">Check cargo</button>
+          <button type="button" class="action" id="hint-button" aria-controls="hint" aria-expanded="false">Show hint</button>
+          <button type="button" class="action primary" id="next" hidden>Next ferry</button>
+        </div>
+        <p class="feedback" id="feedback" role="status"></p>
+        <p class="hint" id="hint" hidden></p>
+      </div>
+
+      <div id="finish" hidden>
+        <p class="trip">Route complete</p>
+        <h2 id="finish-title" tabindex="-1">All ferries loaded!</h2>
+        <p id="result"></p>
+        <button type="button" class="action primary" id="replay">Play again</button>
+      </div>
+    </section>
+
+    <details class="teacher" id="teacher">
+      <summary>Teacher setup</summary>
+      <form id="lesson-form">
+        <p>Edit or paste lesson JSON to preview one to six rounds. Each round uses two fractions of equal length.</p>
+        <label for="lesson-json">Lesson JSON</label>
+        <textarea id="lesson-json" rows="7" spellcheck="false" maxlength="10000"></textarea>
+        <div class="actions">
+          <button type="submit" class="action primary">Load and play lesson</button>
+          <button type="button" class="action" id="restore">Restore sample</button>
+        </div>
+        <p id="import-status" role="status"></p>
+        <div class="share" id="share" hidden>
+          <label for="student-link">Student link</label>
+          <input type="text" id="student-link" readonly spellcheck="false">
+          <p id="share-note"></p>
+        </div>
+      </form>
+    </details>
+  </main>
+
+  <script>
+    const sampleLesson = [
+      { numerator: 1, denominator: 2, splitInto: 4 },
+      { numerator: 3, denominator: 4, splitInto: 8 },
+      { numerator: 4, denominator: 6, splitInto: 9 },
+    ];
+
+    const element = (id) => document.getElementById(id);
+    const player = element("player");
+    const checkButton = element("check");
+    const nextButton = element("next");
+    const hintButton = element("hint-button");
+    const removeButton = element("remove");
+    const addButton = element("add");
+    const lessonInput = element("lesson-json");
+    let lesson = sampleLesson;
+    let roundIndex = 0;
+    let loaded = 0;
+    let attempts = 0;
+    let firstTryCount = 0;
+    let locked = false;
+
+    function renderDeck(deck, parts, interactive) {
+      deck.replaceChildren();
+      deck.style.setProperty("--parts", parts);
+      for (let position = 1; position <= parts; position++) {
+        const slot = document.createElement(interactive ? "button" : "span");
+        slot.className = "slot";
+        slot.textContent = position;
+        if (interactive) {
+          slot.type = "button";
+          slot.setAttribute("aria-label", `Fill ${position} of ${parts} slots`);
+          slot.addEventListener("click", () => setCargo(position));
+        } else {
+          slot.classList.toggle("reference-loaded", position <= lesson[roundIndex].numerator);
+        }
+        deck.append(slot);
+      }
+    }
+
+    function setCargo(count) {
+      loaded = count;
+      const parts = lesson[roundIndex].splitInto;
+      element("player-fraction").value = `${loaded}/${parts}`;
+      Array.from(player.children).forEach((slot, index) => {
+        slot.classList.toggle("loaded", index < loaded);
+        slot.disabled = locked;
+      });
+      removeButton.disabled = locked || loaded === 0;
+      addButton.disabled = locked || loaded === parts;
+      if (!locked) setFeedback();
+    }
+
+    function setFeedback(message = "", kind = "") {
+      const feedback = element("feedback");
+      feedback.dataset.kind = kind;
+      feedback.textContent = message;
+    }
+
+    function setHint(visible) {
+      element("hint").hidden = !visible;
+      hintButton.setAttribute("aria-expanded", visible);
+      hintButton.textContent = visible ? "Hide hint" : "Show hint";
+      player.classList.toggle("show-guide", visible || attempts > 0);
+    }
+
+    function renderRound(moveFocus = false) {
+      const { numerator, denominator, splitInto } = lesson[roundIndex];
+      locked = false;
+      attempts = 0;
+      element("trip").textContent = `Trip ${roundIndex + 1} of ${lesson.length}`;
+      const route = lesson.map((_, index) => {
+        const marker = document.createElement("span");
+        if (index < roundIndex) marker.className = "past";
+        if (index === roundIndex) marker.className = "current";
+        return marker;
+      });
+      element("route").replaceChildren(...route);
+      element("target-fraction").textContent = `${numerator}/${denominator}`;
+      renderDeck(element("reference"), denominator, false);
+      renderDeck(player, splitInto, true);
+      player.style.setProperty("--guide-position", `${numerator / denominator * 100}%`);
+      setCargo(0);
+      setHint(false);
+      element("hint").textContent = splitInto % denominator === 0
+        ? `One slot on Ferry A is as wide as ${splitInto / denominator} slots on Ferry B. Start at the left edge and match the width.`
+        : "Both ferries are the same length. Start at the left edge and look for a stopping point at the same distance on both ferries.";
+      checkButton.hidden = false;
+      hintButton.hidden = false;
+      nextButton.hidden = true;
+      element("play").hidden = false;
+      element("finish").hidden = true;
+      if (moveFocus) element("mission").focus();
+    }
+
+    function start(newLesson, moveFocus = false) {
+      lesson = newLesson;
+      roundIndex = 0;
+      firstTryCount = 0;
+      renderRound(moveFocus);
+    }
+
+    function validateLesson(value) {
+      if (!Array.isArray(value) || value.length < 1 || value.length > 6) {
+        throw new Error("Use a JSON array with one to six rounds.");
+      }
+      return value.map((round, index) => {
+        const { numerator, denominator, splitInto } = round ?? {};
+        const prefix = `Round ${index + 1}:`;
+        if (![numerator, denominator, splitInto].every(Number.isInteger)
+          || denominator < 2 || denominator > 12 || splitInto < 2 || splitInto > 12
+          || numerator < 1 || numerator >= denominator || splitInto === denominator) {
+          throw new Error(`${prefix} Use a proper fraction and two different denominators from 2 to 12.`);
+        }
+        if (numerator * splitInto % denominator !== 0) {
+          throw new Error(`${prefix} Ferry B needs a whole number of slots for the same share.`);
+        }
+        return { numerator, denominator, splitInto };
+      });
+    }
+
+    function showStudentLink(customLesson) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("lesson", customLesson.map(({ numerator, denominator, splitInto }) =>
+        `${numerator}-${denominator}-${splitInto}`).join(","));
+      const link = element("student-link");
+      link.value = url.href;
+      element("share").hidden = false;
+      element("share-note").textContent = url.protocol === "file:"
+        ? "This local link works on this device. Host the page to share it with students."
+        : "Copy this address to share this lesson with students.";
+    }
+
+    function readStudentLink(source) {
+      if (!/^\d{1,2}-\d{1,2}-\d{1,2}(,\d{1,2}-\d{1,2}-\d{1,2}){0,5}$/.test(source)) {
+        throw new Error("The student link could not be read.");
+      }
+      return validateLesson(source.split(",").map((round) => {
+        const [numerator, denominator, splitInto] = round.split("-").map(Number);
+        return { numerator, denominator, splitInto };
+      }));
+    }
+
+    removeButton.addEventListener("click", () => {
+      setCargo(loaded - 1);
+      if (removeButton.disabled) addButton.focus();
+    });
+    addButton.addEventListener("click", () => {
+      setCargo(loaded + 1);
+      if (addButton.disabled) removeButton.focus();
+    });
+    hintButton.addEventListener("click", () => setHint(element("hint").hidden));
+
+    checkButton.addEventListener("click", () => {
+      attempts++;
+      const { numerator, denominator, splitInto } = lesson[roundIndex];
+      const difference = loaded * denominator - numerator * splitInto;
+      if (difference !== 0) {
+        player.classList.add("show-guide");
+        setFeedback(difference < 0
+          ? "Your cargo stops before the dashed line. Add more cargo."
+          : "Your cargo goes past the dashed line. Remove some cargo.", "retry");
+        return;
+      }
+      if (attempts === 1) firstTryCount++;
+      locked = true;
+      setCargo(loaded);
+      setHint(false);
+      setFeedback(`Equal shares! ${numerator}/${denominator} = ${loaded}/${splitInto}. The ferries are the same length.`, "correct");
+      checkButton.hidden = true;
+      hintButton.hidden = true;
+      nextButton.textContent = roundIndex + 1 === lesson.length ? "Finish trip" : "Next ferry";
+      nextButton.hidden = false;
+      nextButton.focus();
+    });
+
+    nextButton.addEventListener("click", () => {
+      roundIndex++;
+      if (roundIndex < lesson.length) {
+        renderRound(true);
+        return;
+      }
+      element("play").hidden = true;
+      element("finish").hidden = false;
+      element("result").textContent = `Matched on your first check: ${firstTryCount} of ${lesson.length}.`;
+      element("finish-title").focus();
+    });
+
+    element("replay").addEventListener("click", () => start(lesson, true));
+    element("student-link").addEventListener("focus", (event) => event.target.select());
+    element("lesson-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const status = element("import-status");
+      try {
+        const customLesson = validateLesson(JSON.parse(lessonInput.value));
+        status.textContent = "Lesson loaded. Your student link is below.";
+        showStudentLink(customLesson);
+        start(customLesson, true);
+      } catch (error) {
+        status.textContent = error instanceof SyntaxError ? "The lesson is not valid JSON." : error.message;
+      }
+    });
+
+    function restoreSample(moveFocus = false) {
+      lessonInput.value = JSON.stringify(sampleLesson, null, 2);
+      element("import-status").textContent = "";
+      element("share").hidden = true;
+      if (moveFocus) element("teacher").open = false;
+      start(sampleLesson, moveFocus);
+    }
+
+    element("restore").addEventListener("click", () => restoreSample(true));
+    restoreSample();
+
+    const studentLesson = new URLSearchParams(window.location.search).get("lesson");
+    if (studentLesson !== null) {
+      try {
+        const customLesson = readStudentLink(studentLesson);
+        lessonInput.value = JSON.stringify(customLesson, null, 2);
+        start(customLesson);
+        showStudentLink(customLesson);
+      } catch {
+        setFeedback("This lesson link could not be loaded. The sample lesson is ready to play.");
+      }
+    }
+  </script>
+</body>
+</html>
