@@ -115,3 +115,21 @@ test("a powered updraft lets the player glide to a higher terrace and has a heig
   assert.equal(player.takeRecovery(), false);
   player.dispose();
 });
+
+test("arena dodge follows held movement and respects terrain", () => {
+  const ground = { canWalk: (x, z) => Math.abs(x) < 2 && Math.abs(z) < 6, heightAt: () => 0 };
+  const { player, press, frames } = simulate(ground);
+  press("KeyD");
+  assert.equal(player.dodge(), true);
+  press("KeyD", false);
+  frames(18);
+  assert.ok(player.position.x > 1.5 && player.position.x < 2);
+  assert.equal(player.position.z, 2);
+  player.reset();
+  assert.equal(player.dodge(), true);
+  frames(18);
+  assert.ok(player.position.z > 4);
+  player.setEnabled(false);
+  assert.equal(player.dodge(), false);
+  player.dispose();
+});

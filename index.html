@@ -34,6 +34,7 @@
       <div class="rank-strip">
         <span id="rank-name"></span><span class="rank-xp" id="rank-xp"></span>
         <span id="skills"></span>
+        <span id="hero-rank"></span>
       </div>
       <p id="carry-status" class="carry-status" hidden></p>
       <p id="notice" class="notice" aria-live="polite" hidden></p>
@@ -41,6 +42,7 @@
       <div class="touch-controls">
         <div data-voyage-stick class="move-stick" aria-hidden="true"><span data-voyage-thumb></span></div>
         <div class="touch-actions">
+          <button type="button" id="duel-dodge" aria-label="Dodge" hidden><span aria-hidden="true">↝</span><small>Dodge</small></button>
           <button type="button" data-voyage-jump aria-label="Jump or glide">↑</button>
           <button type="button" data-voyage-action aria-label="Interact">✦</button>
         </div>
@@ -54,6 +56,10 @@
         <div class="duel-life rival"><div><strong id="duel-rival"></strong><span id="duel-rival-hp"></span></div><meter id="duel-rival-bar" min="0" max="100" value="100"></meter></div>
       </div>
       <p class="duel-log" id="duel-log" aria-live="polite"></p>
+      <aside class="duel-result" id="duel-result" hidden aria-live="polite">
+        <strong id="duel-reward"></strong>
+        <span id="duel-growth"></span>
+      </aside>
       <div id="duel-question" class="duel-question" hidden>
         <div class="question-line"><strong id="duel-question-text"></strong><span id="duel-seconds"></span></div>
         <div class="answer-options" id="duel-answers">
@@ -66,7 +72,9 @@
         <button type="button" data-duel-slot="0" aria-keyshortcuts="1"><kbd>1</kbd><strong></strong><span></span><i></i></button>
         <button type="button" data-duel-slot="1" aria-keyshortcuts="2"><kbd>2</kbd><strong></strong><span></span><i></i></button>
         <button type="button" data-duel-slot="2" aria-keyshortcuts="3"><kbd>3</kbd><strong></strong><span></span><i></i></button>
+        <button type="button" data-duel-slot="3" aria-keyshortcuts="4"><kbd>4</kbd><strong></strong><span></span><i></i></button>
       </div>
+      <p class="duel-controls" id="duel-controls"></p>
     </section>
     <dialog id="duel-lobby" class="duel-lobby" aria-labelledby="duel-lobby-title">
       <h2 id="duel-lobby-title">Friend duel</h2>

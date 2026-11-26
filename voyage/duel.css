@@ -14,6 +14,21 @@
 .duel-log { position: absolute; top: max(3.5rem, calc(env(safe-area-inset-top) + 3rem)); left: 50%;
   margin: 0; padding: .32rem .55rem; transform: translateX(-50%); border-radius: 1.5rem; text-align: center; font-size: .76rem;
   font-weight: 690; background: #203c30db; color: #fff3d6; min-width: 9rem; max-width: calc(100% - 1rem); }
+.duel-log[data-danger="true"] { background: #772c21ed; border: 1px solid #ffbd87; }
+.duel-controls { position: absolute; bottom: max(.35rem, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  margin: 0; color: #ffefd2; text-shadow: 0 1px 4px #162d24, 0 1px 5px #162d24; font-size: .7rem; white-space: nowrap; }
+.duel-result { position: absolute; left: 50%; top: max(6.15rem, calc(env(safe-area-inset-top) + 5.85rem)); transform: translateX(-50%);
+  width: min(23rem, calc(100% - 1.25rem)); text-align: center; background: #1c372ced; border: 1px solid #e5c586;
+  border-radius: .7rem; padding: .62rem .7rem; box-shadow: 0 5px 22px #182e284d; }
+.duel-result strong, .duel-result span { display: block; }
+.duel-result strong { color: #ffde98; font-size: 1rem; }
+.duel-result span { font-size: .79rem; line-height: 1.35; margin-top: .22rem; }
+.rank-strip #hero-rank { display: block; margin-top: .21rem; color: #f8dc9d; }
+.touch-actions #duel-dodge { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  border-color: #e4c28a; background: #304b3e; }
+#duel-dodge span { line-height: .9; }
+#duel-dodge small { font-size: .62rem; line-height: 1.25; }
+#duel-dodge:disabled { opacity: .62; }
 .duel-skills { position: absolute; bottom: max(1.9rem, calc(env(safe-area-inset-bottom) + 1rem)); left: 50%; transform: translateX(-50%);
   display: flex; justify-content: center; gap: .35rem; width: 100%; padding-inline: .45rem; }
 .duel-skills button, .answer-options button {
@@ -21,7 +36,9 @@
   border: 1px solid #b7c590a1; border-radius: .6rem; background: #203c31ec; color: #fff6e3;
   min-height: 46px; padding: .31rem .42rem; line-height: 1.15;
 }
-.duel-skills button { width: var(--skill-width); }
+.duel-skills button { width: var(--skill-width); min-width: 0; }
+.duel-skills button[data-locked="true"] { filter: saturate(.6); border-style: dashed; }
+.duel-skills button[data-tier="signature"]:not([data-locked="true"]) { border-color: #f4cc87; }
 .duel-skills button:hover, .answer-options button:hover { background: #335547; }
 .duel-skills button:disabled { opacity: .65; cursor: default; }
 .duel-skills button i { position: absolute; inset: auto auto 0 0; width: var(--cooldown, 0%); height: 3px; background: #e3bd72; pointer-events: none; }
@@ -55,11 +72,26 @@ body[data-duel='true'] .quest-compass, body[data-duel='true'] .quick-controls, b
 @media (pointer: coarse), (max-width: 660px) {
   .duel-skills { bottom: max(8.1rem, calc(env(safe-area-inset-bottom) + 7.65rem)); --skill-width: 6.8rem; }
   .duel-skills button, .answer-options button { min-height: 44px; }
-  .duel-question { bottom: max(11.7rem, calc(env(safe-area-inset-bottom) + 11.2rem)); }
+  .duel-question { bottom: max(12.65rem, calc(env(safe-area-inset-bottom) + 12.2rem)); }
   .duel-skills kbd { display: none; }
+  .duel-controls { font-size: .63rem; }
   .duel-log { font-size: .68rem; }
 }
+@media (pointer: coarse) {
+  .duel-controls { display: none; }
+}
+@media (max-width: 430px) {
+  .duel-life { padding-inline: .42rem; }
+  .duel-life div { display: grid; gap: .13rem; font-size: .69rem; }
+  .duel-life strong { white-space: nowrap; }
+  .duel-log { top: max(4.15rem, calc(env(safe-area-inset-top) + 3.85rem)); }
+  .duel-result { top: max(6.75rem, calc(env(safe-area-inset-top) + 6.45rem)); }
+  .duel-skills { gap: .25rem; padding-inline: .35rem; }
+  .duel-skills button { padding-inline: .22rem; }
+  .duel-skills button strong { font-size: .72rem; }
+  .duel-skills button span { font-size: .59rem; }
+}
 @media (max-height: 530px) and (pointer: coarse) {
-  .duel-skills { bottom: max(.6rem, env(safe-area-inset-bottom)); width: min(52%, 20.7rem); --skill-width: 6.1rem; }
-  .duel-question { bottom: 3.85rem; }
+  .duel-skills { bottom: max(4.95rem, calc(env(safe-area-inset-bottom) + 4.5rem)); width: min(82%, 28rem); --skill-width: 7.1rem; }
+  .duel-question { bottom: 9.1rem; }
 }

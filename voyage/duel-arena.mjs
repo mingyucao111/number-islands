@@ -6,7 +6,19 @@ const TEAM = Object.freeze({
   warden: { robe: 0x84632b, hood: 0xa88543, cape: 0x91703e, trim: 0xf5cc76, light: 0xffdea0 },
   ember: { robe: 0x943e37, hood: 0xb95a4d, cape: 0xa64c3f, trim: 0xffb789, light: 0xffae7d },
 });
-const LIFE = Object.freeze({ strike: 0.44, shield: 0.87, heal: 1.00, burn: 0.66, dash: 0.52 });
+const LIFE = Object.freeze({
+  strike: 0.44, shield: 0.87, heal: 1.00, burn: 0.66, dash: 0.52,
+  burst: 0.55, dodge: 0.40, cast: 0.35, cleanse: 0.73, haste: 0.55, pierce: 0.48,
+});
+const SPELL = Object.freeze({
+  gale: { edge: 0x166450, body: 0x38bd9e, core: 0xe0ffea },
+  warden: { edge: 0x815415, body: 0xe6a83b, core: 0xfff2bd },
+  ember: { edge: 0x942d20, body: 0xef6146, core: 0xffdec8 },
+});
+const STYLES = new Set(["bolt", "wave", "area"]);
+const PHASES = new Set(["windup", "projectile", "telegraph"]);
+const CAST_TIMES = Object.freeze({ bolt: 0.38, wave: 0.51, area: 0.68 });
+const MAX_SHOWN_ATTACKS = 12;
 const TAU = Math.PI * 2;
 
 function randomFrom(seed) {
@@ -328,17 +340,163 @@ function makeRival(host, hero) {
   return { group, rig, legs, arms, cape, dress };
 }
 
+function transparentInk(color, opacity = 1) {
+  return new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, opacity, toneMapped: false });
+}
+
+function decodeAttack(attack) {
+  if (!attack || !Number.isSafeInteger(attack.id) || attack.id < 1 || !STYLES.has(attack.style)
+    || !PHASES.has(attack.phase) || !Number.isFinite(attack.x) || !Number.isFinite(attack.z)
+    || Math.hypot(attack.x, attack.z) > LIMIT + 15 || !Number.isFinite(attack.radius)
+    || attack.radius < 0.1 || attack.radius > 5 || !Number.isFinite(attack.progress)
+    || attack.progress < 0 || attack.progress > 1 || !Number.isFinite(attack.seconds) || attack.seconds < 0) return null;
+  const dirX = attack.directionX;
+  const dirZ = attack.directionZ;
+  const length = Number.isFinite(dirX) && Number.isFinite(dirZ) ? Math.hypot(dirX, dirZ) : 0;
+  const aim = legalPosition(attack.destination);
+  return {
+    id: attack.id, style: attack.style, x: attack.x, z: attack.z, radius: attack.radius,
+    phase: attack.phase, progress: attack.progress, seconds: attack.seconds,
+    tint: typeof attack.hero === "string" && Object.hasOwn(SPELL, attack.hero) ? SPELL[attack.hero] : SPELL.gale,
+    dx: length > 0.1 ? dirX / length : 0, dz: length > 0.1 ? dirZ / length : 1,
+    distance: aim ? Math.min(14, Math.hypot(aim.x - attack.x, aim.z - attack.z)) : 8,
+  };
+}
+
+function makeAttacks(host) {
+  const flat = (shape) => shape.rotateX(-Math.PI / 2);
+  const shade = flat(new THREE.CircleGeometry(1, 32));
+  const rim = flat(new THREE.RingGeometry(0.88, 1.03, 44));
+  const edge = flat(new THREE.RingGeometry(0.927, 0.997, 44));
+  const countdown = flat(new THREE.RingGeometry(0.89, 1, 36));
+  const stripe = flat(new THREE.PlaneGeometry(1, 1));
+  const point = new THREE.OctahedronGeometry(1);
+  const wave = new THREE.TorusGeometry(0.88, 0.15, 7, 24, Math.PI * 1.08)
+    .rotateZ(-Math.PI * 0.03).rotateX(-Math.PI / 2);
+  const tail = new THREE.ConeGeometry(0.21, 0.86, 7).rotateX(-Math.PI / 2);
+  const pool = Array.from({ length: MAX_SHOWN_ATTACKS }, () => {
+    const field = new THREE.Group();
+    field.name = "Spell footprint";
+    const mark = new THREE.Group();
+    const body = new THREE.Group();
+    const lane = new THREE.Group();
+    host.add(field);
+    field.add(mark, body, lane);
+    field.visible = false;
+    const fill = add(mark, shade, transparentInk(0xffffff, 0.18), [0, 0.026, 0]);
+    const border = add(mark, rim, transparentInk(0xffffff, 0.82), [0, 0.034, 0]);
+    const ring = add(mark, edge, transparentInk(0xffffff, 0.94), [0, 0.040, 0]);
+    const timer = add(mark, countdown, transparentInk(0xffffff, 0.94), [0, 0.046, 0]);
+    const dart = add(body, point, transparentInk(0xffffff), [0, 0.77, 0]);
+    const gust = add(body, wave, transparentInk(0xffffff), [0, 0.72, 0]);
+    const plume = add(body, tail, transparentInk(0xffffff, 0.82), [0, 0.72, -0.44]);
+    const path = add(lane, stripe, transparentInk(0xffffff, 0.23), [0, 0.025, 0.5]);
+    const rails = [-0.5, 0.5].map((x) =>
+      add(lane, stripe, transparentInk(0xffffff, 0.74), [x, 0.033, 0.5], [0.052, 1, 1]));
+    for (const item of [fill, border, ring, timer, dart, gust, plume, path, ...rails]) item.receiveShadow = false;
+    return { field, mark, body, lane, fill, border, ring, timer, dart, gust, plume, path, rails, sample: null, age: 0, speed: 0 };
+  });
+  const active = new Map();
+  let reduced = false;
+
+  function decorate(view, sample) {
+    const { style, phase, tint } = sample;
+    const waiting = phase === "windup";
+    const area = style === "area";
+    const flight = phase === "projectile";
+    view.field.userData.attackId = sample.id;
+    view.field.userData.phase = phase;
+    view.field.userData.style = style;
+    view.field.visible = true;
+    view.mark.scale.set(sample.radius, 1, sample.radius);
+    view.fill.material.color.setHex(tint.body);
+    view.border.material.color.setHex(tint.edge);
+    view.ring.material.color.setHex(tint.body);
+    view.timer.material.color.setHex(tint.edge);
+    view.timer.visible = area;
+    view.body.visible = flight;
+    view.dart.visible = style === "bolt";
+    view.dart.material.color.setHex(tint.core);
+    view.gust.visible = style === "wave";
+    view.gust.material.color.setHex(tint.body);
+    view.plume.material.color.setHex(style === "bolt" ? tint.body : tint.core);
+    view.gust.scale.set(sample.radius, 1.3, sample.radius * 0.72);
+    view.dart.scale.set(sample.radius * 0.47, 0.18, sample.radius * 0.94);
+    view.plume.scale.set(style === "bolt" ? 0.82 : 1.68, 1, style === "bolt" ? 1.23 : 0.95);
+    view.plume.position.z = style === "bolt" ? -0.43 : -0.64;
+    view.lane.visible = waiting && !area && sample.distance > 0.22;
+    view.lane.scale.set(sample.radius * 2, 1, sample.distance);
+    view.path.material.color.setHex(tint.body);
+    for (const rail of view.rails) rail.material.color.setHex(tint.edge);
+    if (waiting) view.fill.material.opacity = 0.15;
+  }
+
+  function sync(attacks) {
+    const desired = new Map();
+    if (Array.isArray(attacks)) {
+      for (let i = 0; i < Math.min(MAX_SHOWN_ATTACKS, attacks.length); i++) {
+        const sample = decodeAttack(attacks[i]);
+        if (sample && !desired.has(sample.id)) desired.set(sample.id, sample);
+      }
+    }
+    for (const [id, view] of active) {
+      if (desired.has(id)) continue;
+      view.field.visible = false;
+      view.sample = null;
+      active.delete(id);
+    }
+    for (const [id, sample] of desired) {
+      let view = active.get(id);
+      if (!view) {
+        view = pool.find((item) => !item.sample);
+        active.set(id, view);
+      }
+      const previous = view.sample;
+      if (!previous || previous.phase !== sample.phase || previous.x !== sample.x
+        || previous.z !== sample.z || previous.progress !== sample.progress || previous.seconds !== sample.seconds) {
+        const duration = previous && previous.phase === "projectile" ? previous.seconds - sample.seconds : 0;
+        const observed = duration > 0.004 ? Math.hypot(previous.x - sample.x, previous.z - sample.z) / duration : 0;
+        view.speed = observed > 0 && observed <= 18 ? observed : sample.style === "bolt"
+          ? sample.radius > 0.5 ? 13.5 : 12 : 8.1;
+        view.age = 0;
+      }
+      view.sample = sample;
+      decorate(view, sample);
+    }
+  }
+
+  function step(dt, time) {
+    for (const view of active.values()) {
+      const a = view.sample;
+      view.age += dt;
+      // Smooth the guest's infrequent network snapshots without leading a freshly simulated attack.
+      const advance = a.phase === "projectile" ? view.speed * Math.min(a.seconds, 0.1, Math.max(0, view.age - 0.026)) : 0;
+      const progress = a.style === "area" && a.seconds > 0
+        ? THREE.MathUtils.clamp(a.progress + Math.min(0.12, view.age) * (1 - a.progress) / a.seconds, 0, 1) : a.progress;
+      view.field.position.set(a.x + a.dx * advance, 0, a.z + a.dz * advance);
+      view.field.rotation.y = Math.atan2(a.dx, a.dz);
+      const wave = !reduced && a.style === "area" ? Math.sin(time * 7) * 0.04 : 0;
+      view.fill.material.opacity = a.style === "area" ? 0.24 + progress * 0.24 + wave : 0.18;
+      const timerScale = Math.max(0.11, 1 - progress * 0.91);
+      view.timer.scale.set(timerScale, 1, timerScale);
+      view.dart.rotation.z = reduced ? 0 : time * 5.2;
+    }
+  }
+  return { sync, step, setReducedMotion(value) { reduced = Boolean(value); } };
+}
+
 function makeEffects(host) {
   const flatRing = new THREE.TorusGeometry(0.8, 0.034, 7, 35).rotateX(-Math.PI / 2);
   const shortArc = new THREE.TorusGeometry(1.03, 0.038, 7, 30, Math.PI * 0.95)
     .rotateZ(Math.PI * 0.53).rotateX(-Math.PI / 2);
+  const brokenArc = new THREE.TorusGeometry(0.95, 0.025, 5, 22, Math.PI * 1.30).rotateX(-Math.PI / 2);
   const sphere = new THREE.SphereGeometry(1, 20, 12, 0, TAU, 0, Math.PI * 0.51);
   const mote = new THREE.OctahedronGeometry(0.11);
   const pool = Array.from({ length: 10 }, () => {
     const space = new THREE.Group();
     host.add(space);
     space.visible = false;
-    const effectInk = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, opacity: 0.8 });
+    const effectInk = transparentInk(0xffffff, 0.8);
     const auraInk = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, opacity: 0.2,
       side: THREE.DoubleSide });
     const halo = add(space, flatRing, effectInk, [0, 0.12, 0]);
@@ -348,26 +506,30 @@ function makeEffects(host) {
     sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     sparks.frustumCulled = false;
     space.add(sparks);
-    return { space, halo, aura, sparks, age: 0, kind: "", start: new THREE.Vector2(), end: new THREE.Vector2() };
+    return { space, halo, aura, sparks, age: 0, kind: "", radius: 1, start: new THREE.Vector2(), end: new THREE.Vector2() };
   });
   let cursor = 0;
+  let reduced = false;
   const stamp = new THREE.Object3D();
 
-  function trigger(kind, tint, origin, target) {
+  function trigger(kind, tint, origin, target, radius) {
     const fx = pool[cursor];
     cursor = (cursor + 1) % pool.length;
     fx.kind = kind;
     fx.age = 0;
+    fx.radius = kind === "burst" && Number.isFinite(radius) ? THREE.MathUtils.clamp(radius, 0.4, 4) : 2.25;
     fx.start.set(origin.x, origin.z);
     fx.end.set(target.x, target.z);
     fx.space.position.set(origin.x, 0, origin.z);
     fx.space.rotation.y = Math.atan2(target.x - origin.x, target.z - origin.z);
     fx.space.visible = true;
-    fx.halo.geometry = kind === "strike" || kind === "dash" ? shortArc : flatRing;
+    fx.halo.geometry = kind === "dodge" || kind === "haste" ? brokenArc
+      : kind === "strike" || kind === "dash" || kind === "pierce" ? shortArc : flatRing;
     fx.halo.material.color.setHex(tint);
     fx.sparks.material.color.setHex(tint);
     fx.aura.material.color.setHex(tint);
-    fx.aura.visible = kind === "shield";
+    fx.aura.visible = kind === "shield" || kind === "cleanse";
+    fx.sparks.visible = !reduced;
   }
 
   function step(dt) {
@@ -377,16 +539,21 @@ function makeEffects(host) {
       const t = fx.age / LIFE[fx.kind];
       if (t >= 1) { fx.space.visible = false; continue; }
       const fade = (1 - t) ** 0.64;
-      const spread = 0.25 + t * 1.95;
+      const spread = fx.kind === "burst" ? (fx.radius / 0.8) * (0.41 + t * 0.71)
+        : fx.kind === "dodge" ? 1.1 + t * 0.72 : fx.kind === "cast" ? 0.35 + t * 0.57 : 0.25 + t * 1.95;
       const fly = fx.kind === "strike" ? 1 - (1 - t) ** 3 : fx.kind === "dash" ? t * 0.72 : 1;
       fx.space.position.x = THREE.MathUtils.lerp(fx.start.x, fx.end.x, fly);
       fx.space.position.z = THREE.MathUtils.lerp(fx.start.y, fx.end.y, fly);
-      fx.halo.position.y = fx.kind === "heal" ? 0.21 + t * 1.76 : fx.kind === "strike" ? 0.84 : 0.12;
+      fx.halo.position.y = fx.kind === "heal" || fx.kind === "haste" ? 0.21 + t * 1.76
+        : fx.kind === "strike" || fx.kind === "pierce" ? 0.84 : 0.12;
+      fx.halo.rotation.y = fx.kind === "dodge" || fx.kind === "haste" ? t * (reduced ? 0 : 3) : 0;
       fx.halo.scale.setScalar(fx.kind === "shield" ? 1.27 + t * 0.54 : spread);
       fx.halo.material.opacity = 0.86 * fade;
       fx.aura.scale.setScalar(0.48 + Math.min(1, t * 6) * 0.88 + t * 0.21);
       fx.aura.material.opacity = fade * 0.24;
       fx.sparks.material.opacity = fade;
+      fx.sparks.visible = !reduced;
+      if (reduced) continue;
       for (let i = 0; i < fx.sparks.count; i++) {
         const angle = i / fx.sparks.count * TAU + t * (fx.kind === "heal" ? 3.4 : 0.54);
         const flyOut = spread * (0.55 + (i % 3) * 0.18);
@@ -401,7 +568,7 @@ function makeEffects(host) {
       fx.sparks.instanceMatrix.needsUpdate = true;
     }
   }
-  return { trigger, step };
+  return { trigger, step, setReducedMotion(value) { reduced = Boolean(value); } };
 }
 
 function legalPosition(position) {
@@ -415,7 +582,7 @@ function sidePoint(side) {
   return { x: 0, z: side === 1 ? -5 : 5, yaw: side === 1 ? Math.PI : 0 };
 }
 
-export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
+export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMotion = false } = {}) {
   if (!root?.isObject3D) throw new TypeError("The duel arena requires a Three.js scene.");
   const homeSide = side === 1 ? 1 : 0;
   const spawn = sidePoint(homeSide);
@@ -432,11 +599,21 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
   rival.group.position.set(away.x, 0, away.z);
   rival.group.rotation.y = away.yaw;
   const vfx = makeEffects(group);
+  const attacks = makeAttacks(group);
   let target = away;
   let requestedYaw = null;
   let stride = 0;
   let gesture = "";
   let gestureAge = 1;
+  let cast = null;
+  let reduced = Boolean(reduceMotion);
+
+  function setReducedMotion(value) {
+    reduced = Boolean(value);
+    vfx.setReducedMotion(reduced);
+    attacks.setReducedMotion(reduced);
+  }
+  setReducedMotion(reduced);
 
   function setRival(update) {
     const destination = legalPosition(update);
@@ -449,18 +626,26 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
     }
   }
 
-  function pulse({ kind, side: actor = homeSide, hero, target: destination, origin } = {}) {
+  function pulse({ kind, side: actor = homeSide, hero, target: destination, origin, radius } = {}) {
     if (typeof kind !== "string" || !Object.hasOwn(LIFE, kind)) return;
     const friends = actor === homeSide;
     const position = legalPosition(origin) ?? (friends ? spawn : { x: rival.group.position.x, z: rival.group.position.z });
     const end = legalPosition(destination) ?? position;
     const light = (typeof hero === "string" && Object.hasOwn(TEAM, hero) ? TEAM[hero] : TEAM.gale).light;
-    const tint = kind === "heal" ? 0xcce89c : kind === "burn" ? 0xff9b6a : light;
-    vfx.trigger(kind, tint, position, end);
+    const tint = kind === "heal" ? 0xcce89c : kind === "burn" ? 0xff9b6a
+      : kind === "dodge" ? 0xd3fff5 : kind === "cleanse" ? 0xf1e2a4 : light;
+    vfx.trigger(kind, tint, position, end, radius);
     if (!friends) {
       gesture = kind;
       gestureAge = 0;
     }
+  }
+
+  function playCast(style, aim) {
+    if (!STYLES.has(style)) return;
+    const target = legalPosition(aim);
+    if (!target) return;
+    cast = { style, target, age: 0 };
   }
 
   function update(dt, time) {
@@ -473,7 +658,14 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
     const easing = 1 - Math.exp(-step * 15);
     place.x += dx * easing;
     place.z += dz * easing;
-    const look = requestedYaw ?? (gap > 0.045 ? Math.atan2(-dx, -dz) : Math.atan2(place.x, place.z));
+    if (cast) {
+      cast.age += step;
+      if (cast.age >= CAST_TIMES[cast.style]) cast = null;
+    }
+    const castWeight = cast ? Math.sin(Math.PI * cast.age / CAST_TIMES[cast.style]) * (reduced ? 0.72 : 1) : 0;
+    const castYaw = cast && Math.hypot(place.x - cast.target.x, place.z - cast.target.z) > 0.04
+      ? Math.atan2(place.x - cast.target.x, place.z - cast.target.z) : null;
+    const look = castYaw ?? requestedYaw ?? (gap > 0.045 ? Math.atan2(-dx, -dz) : Math.atan2(place.x, place.z));
     if (Math.abs(place.x) + Math.abs(place.z) > 0.01 || requestedYaw !== null) {
       const turn = look - rival.group.rotation.y;
       rival.group.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * easing;
@@ -483,17 +675,19 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
     gestureAge += step;
     const effort = gesture && gestureAge < LIFE[gesture] ? Math.sin(Math.PI * gestureAge / LIFE[gesture]) : 0;
     rival.rig.position.y = moving * (1 - Math.cos(stride * 2)) * 0.039;
-    rival.rig.rotation.x = gesture === "dash" ? effort * 0.23 : moving * 0.066;
-    rival.cape.rotation.x = -0.25 - moving * 0.12 - effort * 0.085 + Math.sin(time * 3.8) * 0.034;
+    rival.rig.rotation.x = (gesture === "dash" ? effort * 0.23 : moving * 0.066) + castWeight * 0.10;
+    rival.cape.rotation.x = -0.25 - moving * 0.12 - effort * 0.085 + (reduced ? 0 : Math.sin(time * 3.8) * 0.034);
     for (let i = 0; i < 2; i++) {
       const sign = i * 2 - 1;
       const wave = Math.sin(stride) * sign * moving;
       rival.legs[i].rotation.x = wave * 0.53;
-      rival.arms[i].rotation.x = -wave * 0.43
+      rival.arms[i].rotation.x = -wave * 0.43 - castWeight * (cast?.style === "bolt" && i === 0 ? 0.28 : 1.06)
         - (gesture === "strike" && i === 1 ? effort * 1.28 : gesture === "heal" || gesture === "shield" ? effort * 0.53 : 0);
-      rival.arms[i].rotation.z = sign * (0.23 + (gesture === "shield" ? effort * 0.42 : 0));
+      rival.arms[i].rotation.z = sign * (0.23 + (gesture === "shield" ? effort * 0.42 : 0)
+        + (cast?.style === "area" ? castWeight * 0.59 : castWeight * 0.11));
     }
-    flutter(time);
+    flutter(reduced ? 0 : time);
+    attacks.step(step, time);
     vfx.step(step);
   }
 
@@ -502,6 +696,9 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden" } = {}) {
     heightAt(x, z) { return Number.isFinite(x) && Number.isFinite(z) ? 0 : NaN; },
     canWalk(x, z) { return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= LIMIT; },
     setRival,
+    setAttacks: attacks.sync,
+    setReducedMotion,
+    playCast,
     pulse,
     update,
   };

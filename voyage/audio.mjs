@@ -40,8 +40,11 @@ export function createSoundscape() {
 
   function play(cue = "use") {
     if (!context || context.state !== "running" || muted) return;
-    const pitches = cue === "complete" ? [261.63, 329.63, 392, 523.25]
-      : cue === "advance" ? [329.63, 392, 523.25] : [293.66, 392];
+    const pitches = {
+      complete: [261.63, 329.63, 392, 523.25], advance: [329.63, 392, 523.25],
+      bolt: [523.25, 783.99], wave: [246.94, 369.99, 493.88], area: [196, 233.08, 349.23],
+      impact: [164.81, 110],
+    }[cue] ?? [293.66, 392];
     const now = context.currentTime;
     pitches.forEach((pitch, index) => {
       const oscillator = context.createOscillator();

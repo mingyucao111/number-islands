@@ -9,12 +9,14 @@ import { createGrove } from "./grove.mjs";
 import { createSummit } from "./summit.mjs";
 import { buildHeroShrines, buildPassage, buildWaystones } from "./waystones.mjs";
 import { HEROES } from "./combat-rules.mjs";
+import { awardDuel, heroProgress, learnSignature, openHeroGrowth, SIGNATURE_LEVEL, SIGNATURE_PRICE } from "./hero-growth.mjs";
 import { createArenaDuel } from "./duel.mjs";
 import { createDuelLobby } from "./duel-lobby.mjs";
 
 const SAVE = "number-islands-campaign-v1";
 const LEGACY_SAVE = "number-islands-last-light-v1";
 const HERO_SAVE = "number-islands-hero-v1";
+const GROWTH_SAVE = "number-islands-arena-growth-v1";
 const spawn = { x: 0, z: 24, yaw: 0 };
 const get = (id) => document.getElementById(id);
 
@@ -166,6 +168,7 @@ export function startVoyage() {
   let player;
   const storedHero = readSaved(HERO_SAVE);
   let selectedHero = typeof storedHero === "string" && Object.hasOwn(HEROES, storedHero) ? storedHero : "gale";
+  let growth = openHeroGrowth(readSaved(GROWTH_SAVE));
   let duel;
   let arenaGroup;
   let arenaReturn;
@@ -193,6 +196,24 @@ export function startVoyage() {
 
   function save() {
     try { localStorage.setItem(SAVE, JSON.stringify(campaign)); } catch { /* play without a persistent checkpoint */ }
+  }
+
+  function updateHeroGrowth(change) {
+    function apply() {
+      const saved = readSaved(GROWTH_SAVE);
+      if (saved) growth = openHeroGrowth(saved);
+      const changeResult = change(growth);
+      growth = changeResult.state;
+      try { localStorage.setItem(GROWTH_SAVE, JSON.stringify(growth)); } catch { /* keep progress this session */ }
+      refreshHeroRank();
+      return changeResult;
+    }
+    return navigator.locks ? navigator.locks.request(GROWTH_SAVE, apply).catch(apply) : Promise.resolve(apply());
+  }
+
+  function refreshHeroRank() {
+    const { level, coins } = heroProgress(growth, selectedHero);
+    get("hero-rank").textContent = `${HEROES[selectedHero].name} · Lv ${level} · ${coins} gold`;
   }
 
   function resize() {
@@ -225,7 +246,8 @@ export function startVoyage() {
     player?.setWindLift(skills.lift);
     get("rank-name").textContent = rankFor(xp).name;
     get("rank-xp").textContent = `${xp} XP`;
-    get("skills").textContent = [HEROES[selectedHero].name, skills.glide && "Glide", skills.lift && "Ride the wind"].filter(Boolean).join(" · ");
+    get("skills").textContent = [skills.glide && "Glide", skills.lift && "Ride the wind"].filter(Boolean).join(" · ");
+    refreshHeroRank();
   }
 
   function loadRegion(chapterIndex, { home = false, complete = false } = {}) {
@@ -280,7 +302,13 @@ export function startVoyage() {
   function pierAction(position) {
     if (index !== 0 || region.state.carried) return null;
     const hero = region.shrines.find(({ point }) => closeTo(position, point, 1.16));
-    if (hero) return { type: "hero", id: hero.hero.id, label: `Play as ${hero.hero.name}`, loc: hero.point };
+    if (hero) {
+      const { id, name, skills } = hero.hero;
+      const progress = heroProgress(growth, id);
+      const learn = selectedHero === id && progress.canLearn;
+      const label = learn ? `Learn ${skills[3].name} · ${SIGNATURE_PRICE} gold` : `Play as ${name} · Lv ${progress.level}`;
+      return { type: learn ? "learn" : "hero", id, label, loc: hero.point };
+    }
     if (closeTo(position, practiceGate, 1.48)) return { type: "practice", label: "Enter the practice arena", loc: practiceGate };
     if (closeTo(position, friendGate, 1.48)) return { type: "friend", label: "Play a friend duel", loc: friendGate };
     if (region.home && closeTo(position, replayBell, 1.55)) {
@@ -308,8 +336,13 @@ export function startVoyage() {
     scene.remove(group);
     arenaGroup = new THREE.Group();
     scene.add(arenaGroup);
-    duel = createArenaDuel(arenaGroup, { route: route.id, hero: selectedHero, connection,
-      player: () => player, sound, onExit: leaveDuel });
+    const hero = selectedHero;
+    const matchId = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(36)).join("-");
+    duel = createArenaDuel(arenaGroup, { route: route.id, hero, progress: heroProgress(growth, hero), connection,
+      player: () => player, sound, onExit: leaveDuel, async onComplete(outcome, mode) {
+        const { state, reward } = await updateHeroGrowth((current) => awardDuel(current, { matchId, hero, mode, outcome }));
+        return { reward, progress: heroProgress(state, hero) };
+      } });
     arenaPassage = buildPassage(arenaGroup, duel.exit, "", 0xc5d6a0);
     player.reset(duel.spawn);
     player.setWindGlide(false);
@@ -366,14 +399,24 @@ export function startVoyage() {
     const action = interactionAt();
     if (!action) return;
     if (duel) { duel.leave(); return; }
+    if (action.type === "learn") {
+      void updateHeroGrowth((current) => ({ state: learnSignature(current, action.id) })).then(({ state }) => {
+        if (!heroProgress(state, action.id).signature) return;
+        announce(`${HEROES[action.id].skills[3].name} learned. Press 4 to use it in a duel.`, 5700);
+        sound.play("complete");
+      });
+      return;
+    }
     if (action.type === "hero") {
       selectedHero = action.id;
       try { localStorage.setItem(HERO_SAVE, JSON.stringify(selectedHero)); } catch { /* chosen for this session */ }
       player.setHero(selectedHero);
       canvas.dataset.hero = selectedHero;
       refreshGrowth();
-      const descriptions = { gale: "a quick dash and evasion", warden: "shields", ember: "healing and lingering embers" };
-      announce(`${HEROES[selectedHero].name} selected · ${descriptions[selectedHero]}`);
+      const progress = heroProgress(growth, selectedHero);
+      const signature = HEROES[selectedHero].skills[3].name;
+      announce(progress.signature ? `${HEROES[selectedHero].name} selected · ${signature} ready`
+        : `${HEROES[selectedHero].name} selected · Learn ${signature} here at Lv ${SIGNATURE_LEVEL} for ${SIGNATURE_PRICE} gold`);
       sound.play("advance");
       return;
     }
@@ -485,7 +528,7 @@ export function startVoyage() {
     }
     const time = reduceMotion ? 12 : now * .001;
     if (duel) {
-      duel.update(dt, time);
+      duel.update(dt, time, reduceMotion);
       arenaPassage.update(time);
     } else region.update(dt, time);
     if (now - lastHud >= 85) {
@@ -510,6 +553,11 @@ export function startVoyage() {
   window.addEventListener("keydown", () => void sound.start(), { once: true });
   window.addEventListener("pointerdown", () => void sound.start(), { once: true });
   window.addEventListener("resize", resize, { passive: true });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== GROWTH_SAVE) return;
+    growth = openHeroGrowth(readSaved(GROWTH_SAVE));
+    refreshHeroRank();
+  });
   window.addEventListener("hashchange", consumeInvite);
   matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", (event) => { reduceMotion = event.matches; });
   resize();

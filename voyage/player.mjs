@@ -8,6 +8,11 @@ const STEP_DOWN = 0.58;
 const GAP_FALL = 2.8;
 const MAX_WIND_RISE = 9;
 const FLIGHT_CLEARANCE = 0.08;
+const castPoses = Object.freeze({
+  bolt: { arms: [-.5, -1.92], spread: .23, duration: .42 },
+  wave: { arms: [-1.08, -1.08], spread: .88, duration: .52 },
+  area: { arms: [-2.41, -2.41], spread: .36, duration: .65 },
+});
 
 const motionKeys = new Set([
   "KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
@@ -251,6 +256,8 @@ export function createPlayer({
   let actionQueued = false;
   let recovered = false;
   let burstSeconds = 0;
+  let dodging = false;
+  let spellPose = null;
   let carried = null;
   let stickPointer = null;
   let lookPointer = null;
@@ -282,6 +289,30 @@ export function createPlayer({
     if (length < 2.6) return;
     burst.normalize().multiplyScalar(11.5);
     burstSeconds = Math.min(.23, (length - 2) / 11.5);
+    dodging = false;
+  }
+
+  function movementDirection(vector) {
+    const sideways = Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft")) + axes.x;
+    const forward = Number(keys.has("KeyW") || keys.has("ArrowUp")) - Number(keys.has("KeyS") || keys.has("ArrowDown")) - axes.y;
+    return vector.set(sideways * Math.cos(yaw) - forward * Math.sin(yaw),
+      -sideways * Math.sin(yaw) - forward * Math.cos(yaw)).clampLength(0, 1);
+  }
+
+  function dodge() {
+    if (!enabled || carried || !isGrounded()) return false;
+    movementDirection(burst);
+    if (burst.lengthSq() < .02) burst.set(Math.sin(yaw), Math.cos(yaw));
+    burst.normalize().multiplyScalar(12.6);
+    burstSeconds = .27;
+    dodging = true;
+    return true;
+  }
+
+  function playSpell(style, target) {
+    const pose = castPoses[style];
+    if (!pose || !target || !Number.isFinite(target.x) || !Number.isFinite(target.z)) return;
+    spellPose = { pose, expires: clock + pose.duration, heading: Math.atan2(position.x - target.x, position.z - target.z) };
   }
 
   function setWindLift(enabled) {
@@ -460,12 +491,15 @@ export function createPlayer({
     lastSafe.copy(position);
     motion.set(0, 0);
     burstSeconds = 0;
+    dodging = false;
+    spellPose = null;
     yaw = candidate.yaw;
     yawTarget = poseYaw = yaw;
     pitch = pitchTarget = 0.38;
     verticalSpeed = glideBlend = pace = 0;
     explorer.root.rotation.y = yaw;
     explorer.model.position.y = 0;
+    explorer.model.rotation.x = 0;
     setCarried(null);
     updateShadow();
     updateCamera(0, true);
@@ -504,16 +538,13 @@ export function createPlayer({
     yaw = wrapAngle(yaw + wrapAngle(yawTarget - yaw) * smoothing(16, dt));
     pitch = lerp(pitch, pitchTarget, smoothing(16, dt));
 
-    const sideways = Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft")) + axes.x;
-    const forward = Number(keys.has("KeyW") || keys.has("ArrowUp")) - Number(keys.has("KeyS") || keys.has("ArrowDown")) - axes.y;
     const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
     const speed = carried ? WALK_SPEED * 0.75 : running ? RUN_SPEED : WALK_SPEED;
-    wanted.set(sideways * Math.cos(yaw) - forward * Math.sin(yaw),
-      -sideways * Math.sin(yaw) - forward * Math.cos(yaw)).clampLength(0, 1).multiplyScalar(speed);
+    movementDirection(wanted).multiplyScalar(speed);
     if (burstSeconds > 0) {
       wanted.copy(burst);
       burstSeconds -= dt;
-    }
+    } else dodging = false;
     motion.lerp(wanted, smoothing(wanted.lengthSq() ? 18 : 23, dt));
     if (motion.lengthSq() < 0.003) motion.set(0, 0);
 
@@ -558,7 +589,10 @@ export function createPlayer({
 
     if (isGrounded()) lastSafe.copy(position);
 
-    if (wanted.lengthSq() > 0.05) {
+    const casting = spellPose && clock < spellPose.expires ? spellPose : null;
+    if (casting && !dodging) {
+      poseYaw = wrapAngle(poseYaw + wrapAngle(casting.heading - poseYaw) * smoothing(20, dt));
+    } else if (wanted.lengthSq() > 0.05) {
       const desiredYaw = Math.atan2(-wanted.x, -wanted.y);
       poseYaw = wrapAngle(poseYaw + wrapAngle(desiredYaw - poseYaw) * smoothing(14, dt));
     }
@@ -567,16 +601,19 @@ export function createPlayer({
     const motionBlend = Math.min(1, moved / WALK_SPEED);
     pace += dt * moved * 3.2;
     explorer.model.position.y = !airborne ? (0.5 - Math.cos(pace * 2) * 0.5) * motionBlend * 0.049 : 0;
+    explorer.model.rotation.x = lerp(explorer.model.rotation.x, dodging ? .26 : 0, smoothing(14, dt));
     const phase = Math.sin(pace);
     for (let i = 0; i < 2; i++) {
       const direction = i === 0 ? -1 : 1;
       const step = phase * direction * motionBlend;
       const legTarget = airborne ? -0.23 + direction * 0.17 - glideBlend * 0.14 : step * 0.62;
       const hold = carried && i === 1;
-      const armTarget = hold ? -1.02 : airborne ? -0.28 - glideBlend * 0.35 : -step * 0.48;
+      const armTarget = hold ? -1.02 : dodging ? .42 : casting ? casting.pose.arms[i]
+        : airborne ? -0.28 - glideBlend * 0.35 : -step * 0.48;
       explorer.legs[i].rotation.x = lerp(explorer.legs[i].rotation.x, legTarget, smoothing(16, dt));
       explorer.arms[i].rotation.x = lerp(explorer.arms[i].rotation.x, armTarget, smoothing(16, dt));
-      explorer.arms[i].rotation.z = lerp(explorer.arms[i].rotation.z, direction * (0.19 + glideBlend * 0.83), smoothing(8, dt));
+      const spread = casting && !dodging ? casting.pose.spread : 0.19 + glideBlend * 0.83;
+      explorer.arms[i].rotation.z = lerp(explorer.arms[i].rotation.z, direction * spread, smoothing(10, dt));
     }
     explorer.animateCape(clock, moved, glideBlend);
     updateShadow();
@@ -603,5 +640,6 @@ export function createPlayer({
   }
 
   reset();
-  return { position, setCarried, setWindGlide, setWindLift, setEnabled, setHero: explorer.setHero, dashToward, takeInteract, takeRecovery, checkpoint, update, reset, dispose };
+  return { position, setCarried, setWindGlide, setWindLift, setEnabled, setHero: explorer.setHero,
+    dashToward, dodge, playSpell, takeInteract, takeRecovery, checkpoint, update, reset, dispose };
 }

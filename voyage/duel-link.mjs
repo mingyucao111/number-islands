@@ -4,7 +4,7 @@ const PROTOCOL = "ni-duel-v1";
 const BYE = "@ni-duel/close/1";
 const MAX_CODE = 17_000;
 const MAX_SDP = 12_000;
-const MAX_PACKET = 8192;
+export const MAX_DUEL_PACKET_BYTES = 12 * 1024;
 const MAX_PENDING = 48_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -72,7 +72,7 @@ function objectRecord(value) {
 
 function safeJson(value, depth = 0, budget = { left: 2048 }) {
   if (--budget.left < 0) return false;
-  if (typeof value === "string") return value.length <= MAX_PACKET;
+  if (typeof value === "string") return value.length <= MAX_DUEL_PACKET_BYTES;
   if (value === null || typeof value === "boolean" || Number.isFinite(value)) return true;
   if (depth >= 9) return false;
   if (Array.isArray(value)) return value.length <= 128 && value.every((part) => safeJson(part, depth + 1, budget));
@@ -85,14 +85,14 @@ function formatPacket(value) {
   try {
     if (!objectRecord(value) || !safeJson(value)) return null;
     const json = JSON.stringify(value);
-    return encoder.encode(json).length <= MAX_PACKET ? json : null;
+    return encoder.encode(json).length <= MAX_DUEL_PACKET_BYTES ? json : null;
   } catch {
     return null;
   }
 }
 
 function readPacket(value) {
-  if (typeof value !== "string" || value.length > MAX_PACKET || encoder.encode(value).length > MAX_PACKET) return null;
+  if (typeof value !== "string" || value.length > MAX_DUEL_PACKET_BYTES || encoder.encode(value).length > MAX_DUEL_PACKET_BYTES) return null;
   try {
     const parsed = JSON.parse(value);
     return objectRecord(parsed) && safeJson(parsed) ? parsed : null;

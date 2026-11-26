@@ -20,7 +20,9 @@ Gale can dash, hurry other spells and pierce a ward. Warden has shields, ember c
 
 - **Practice:** Walk through the **Practice arena** arch to duel a computer opponent.
 - **Friend duel:** Use the **Friend duel** arch. One player creates and shares an invite link. The other opens it, creates a reply code and sends the code back. The host pastes the reply and both enter the same real-time arena. The host’s grade band determines the maths for both players. It uses a direct WebRTC data connection, so some network combinations cannot connect without a relay.
-- **Skills:** Move within range and press **1**, **2** or **3** to choose a spell. Use the same keys to answer the maths question, or tap the skill and answer controls. A correct answer deals damage and applies the spell’s distinct effect. Wrong or late answers still use that skill’s cooldown. Walk to the return arch and interact to leave, or press **Esc**.
+- **Skills:** Move within range and press **1**, **2** or **3** to choose a spell. Use **1–3** to answer the maths question, or tap the skill and answer controls. A correct answer launches a spell in the world. Bolts and waves travel along a line. An area spell marks its impact zone first. Enemy damage requires a hit. Wrong or late answers still use the skill's cooldown.
+- **Dodging:** Move while answering with WASD or the touch stick. Press **F** or tap **Dodge** to dash in the direction you are moving. Dodge starts with a 2.8-second recharge, which gets shorter at levels 3–5. Walk to the return arch and interact to leave, or press **Esc**.
+- **Hero growth:** A completed practice or friend duel earns XP and gold for the hero you played. A practice win earns 60 XP and 35 gold. At level 2, return to that hero's stone and spend 30 gold to learn their signature spell. **4** or the fourth skill button casts Gale's Slipstream, Warden's Moonwall or Ember's Phoenix Bloom once learned. Hero levels, gold and learned skills are saved in the current browser.
 
 | Skill tier | Base damage | Cooldown |
 | --- | ---: | ---: |
