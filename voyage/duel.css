@@ -3,6 +3,7 @@
   width: min(35rem, calc(100% - 2rem)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .64rem; }
 .duel-life { padding: .34rem .55rem .4rem; border-radius: .55rem; background: #162c26de; border: 1px solid #a3bc9b8a; }
 .duel-life div { display: flex; justify-content: space-between; gap: .25rem; font-size: .75rem; }
+.duel-life strong { overflow: hidden; text-overflow: ellipsis; }
 .duel-life span { white-space: nowrap; }
 .duel-life meter { display: block; appearance: none; width: 100%; height: 8px; margin-top: .27rem; }
 .duel-life meter::-webkit-meter-bar { background: #425951; border: 0; border-radius: 10px; }
@@ -23,6 +24,9 @@
 .duel-result strong, .duel-result span { display: block; }
 .duel-result strong { color: #ffde98; font-size: 1rem; }
 .duel-result span { font-size: .79rem; line-height: 1.35; margin-top: .22rem; }
+#ranked-result { color: #caecc9; font-weight: 750; margin-top: .4rem; }
+.ranked-result-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .38rem; }
+.ranked-result-actions button { pointer-events: auto; margin-top: .45rem; }
 .rank-strip #hero-rank { display: block; margin-top: .21rem; color: #f8dc9d; }
 .touch-actions #duel-dodge { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
   border-color: #e4c28a; background: #304b3e; }
@@ -69,6 +73,50 @@ body[data-duel='true'] .quest-compass, body[data-duel='true'] .quick-controls, b
 .duel-link-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin-top: .55rem; }
 #duel-cancel { background: #526650; color: #fff6df; }
 #duel-link-status { color: #f7d896; }
+.ranked-lobby {
+  width: min(30rem, calc(100% - 1rem)); max-height: calc(100vh - 1rem);
+  max-height: min(42rem, calc(100dvh - max(1rem, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + .5rem))));
+  padding: clamp(.94rem, 4vw, 1.35rem); border: 1px solid #b6c99a; border-radius: 1.1rem;
+  color: #fff6df; background: radial-gradient(ellipse at 94% 5%, #416554, transparent 48%), #213b32;
+  box-shadow: 0 16px 56px #0e201c9c; overflow: auto; overscroll-behavior: contain;
+}
+.ranked-lobby::backdrop { background: #142620bd; }
+.ranked-intro { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.ranked-intro h2 { margin: 0; color: #fff3d7; font: 750 clamp(1.73rem, 6vw, 2.4rem)/.98 var(--display); letter-spacing: -.035em; }
+#ranked-description { margin: .44rem 0 0; color: #e5ecdb; line-height: 1.45; font-size: .85rem; }
+.ranked-seal { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 50%;
+  border: 1px solid #a8c79f96; background: radial-gradient(circle, #63906b, #3a6251 72%); color: #fff0b7;
+  box-shadow: inset 0 0 0 4px #d7e1b916; font-size: 1.64rem; }
+.ranked-identity { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .26rem .7rem;
+  padding: .7rem 0; margin-top: .67rem; border-top: 1px solid #b2c4a452; border-bottom: 1px solid #b2c4a452; }
+#ranked-grade { color: #c7e9bd; font-size: .81rem; font-weight: 790; }
+#ranked-profile { color: #f4d38b; font-size: .88rem; }
+.ranked-standings { min-width: 0; padding: .69rem 0 .25rem; }
+.ranked-standings h3 { margin: 0 0 .29rem; font: 760 1.04rem/1.2 var(--display); }
+#ranked-leaderboard { margin: 0; padding: 0 .28rem 0 1.55rem; max-height: 11rem; overflow: auto; overscroll-behavior: contain; }
+#ranked-leaderboard li { padding: .34rem .16rem; line-height: 1.36; font-size: .81rem;
+  color: #edf1da; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#ranked-leaderboard li + li { border-top: 1px solid #acbda030; }
+#ranked-leaderboard li::marker { color: #cfdeb4; font-size: .74rem; font-weight: 800; }
+#ranked-empty { margin: .18rem 0; color: #cfe2cd; font-size: .81rem; line-height: 1.42; }
+#ranked-status { margin: .44rem 0; color: #ffdc91; font-size: .83rem; line-height: 1.4; overflow-wrap: anywhere; }
+#ranked-status:empty { display: none; }
+.ranked-lobby-actions { display: flex; flex-wrap: wrap; gap: .42rem; margin-top: .7rem; }
+.ranked-lobby-actions button, .ranked-result-actions button { min-height: 44px; border: 1px solid #b4c7a27d; border-radius: .57rem;
+  padding: .38rem .63rem; color: #f8f3dd; background: #426050; cursor: pointer; font-size: .82rem; font-weight: 760; }
+.ranked-lobby-actions button:hover, .ranked-result-actions button:hover { background: #52735c; }
+#ranked-queue, #ranked-again { background: #e8c376; border-color: #f0d28b; color: #28332a; }
+#ranked-queue:hover, #ranked-again:hover { background: #f3d18b; }
+.ranked-lobby-actions button:disabled, .ranked-result-actions button:disabled { cursor: default; opacity: .65; }
+@media (min-width: 530px) and (max-height: 500px) {
+  .ranked-lobby[open] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .96fr); align-items: start; gap: .48rem 1.02rem; }
+  .ranked-intro { grid-column: 1; grid-row: 1; }
+  .ranked-identity { grid-column: 1; grid-row: 2; margin-top: .17rem; padding-block: .43rem; }
+  .ranked-standings { grid-column: 2; grid-row: 1 / 4; padding: .15rem 0 .1rem .7rem; border-left: 1px solid #b2c4a452; }
+  #ranked-leaderboard { max-height: min(26dvh, 8rem); }
+  #ranked-status { grid-column: 1; grid-row: 3; margin: .18rem 0; }
+  .ranked-lobby-actions { grid-column: 1 / -1; margin-top: .12rem; }
+}
 @media (pointer: coarse), (max-width: 660px) {
   .duel-skills { bottom: max(8.1rem, calc(env(safe-area-inset-bottom) + 7.65rem)); --skill-width: 6.8rem; }
   .duel-skills button, .answer-options button { min-height: 44px; }

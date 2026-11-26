@@ -59,6 +59,11 @@
       <aside class="duel-result" id="duel-result" hidden aria-live="polite">
         <strong id="duel-reward"></strong>
         <span id="duel-growth"></span>
+        <span id="ranked-result" hidden></span>
+        <div class="ranked-result-actions">
+          <button type="button" id="ranked-again" hidden>Find next match</button>
+          <button type="button" id="ranked-board" hidden>Leaderboard</button>
+        </div>
       </aside>
       <div id="duel-question" class="duel-question" hidden>
         <div class="question-line"><strong id="duel-question-text"></strong><span id="duel-seconds"></span></div>
@@ -92,6 +97,30 @@
         <button type="button" id="duel-cancel">Return to the island</button>
       </div>
       <p id="duel-link-status" role="status"></p>
+    </dialog>
+    <dialog id="ranked-lobby" class="ranked-lobby" aria-labelledby="ranked-lobby-title" aria-describedby="ranked-description">
+      <header class="ranked-intro">
+        <div>
+          <h2 id="ranked-lobby-title">Ranked Arena</h2>
+          <p id="ranked-description">Find a rival on your maths route. Play for a place on its leaderboard.</p>
+        </div>
+        <span class="ranked-seal" aria-hidden="true">✦</span>
+      </header>
+      <div class="ranked-identity">
+        <span id="ranked-grade"></span>
+        <strong id="ranked-profile"></strong>
+      </div>
+      <section class="ranked-standings" aria-labelledby="ranked-standings-title">
+        <h3 id="ranked-standings-title">Leaderboard</h3>
+        <ol id="ranked-leaderboard"></ol>
+        <p id="ranked-empty" hidden>No scores on this route yet.</p>
+      </section>
+      <p id="ranked-status" role="status" aria-live="polite"></p>
+      <div class="ranked-lobby-actions">
+        <button type="button" id="ranked-queue">Find match</button>
+        <button type="button" id="ranked-cancel" hidden>Cancel search</button>
+        <button type="button" id="ranked-close">Return to island</button>
+      </div>
     </dialog>
     <div id="chapter-banner" class="chapter-banner" aria-live="polite" hidden><p></p><h1></h1><span></span></div>
     <div id="paused" class="paused" hidden>Voyage paused <span>Press Esc to continue</span></div>

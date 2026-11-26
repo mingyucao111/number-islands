@@ -58,16 +58,17 @@ function label(element, value) {
   if (element.textContent !== value) element.textContent = value;
 }
 
-export function createArenaDuel(root, { route, hero, progress, connection, player, sound, onExit, onComplete }) {
+export function createArenaDuel(root, { route, hero, progress, connection, player, sound, onExit, onRankedAction, onComplete }) {
   const solo = !connection;
+  const ranked = connection?.kind === "ranked";
   const side = connection?.side ?? 0;
   const remoteSide = 1 - side;
-  let enemy = hero === "warden" ? "ember" : "warden";
+  let enemy = ranked ? connection.rivalHero : hero === "warden" ? "ember" : "warden";
   const map = createDuelArena(root, { side, rivalHero: enemy });
   const other = { x: 0, z: side === 0 ? -5 : 5 };
   const exit = { x: 0, y: 0, z: side === 0 ? 10 : -10 };
-  const signature = progress.signature;
-  const dodgeCooldown = progress.dodgeCooldown;
+  const signature = !ranked && progress.signature;
+  const dodgeCooldown = ranked ? 2.8 : progress.dodgeCooldown;
   let combat = solo ? createCombat({ heroes: [hero, enemy], route, signatures: [signature, signature] }) : null;
   let snapshot = combat?.read(side) ?? null;
   let matchRoute = route;
@@ -75,6 +76,8 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   let disposed = false;
   let pendingAnswer = false;
   let versionMismatch = false;
+  let roomPaused = false;
+  let ranking = null;
   let finished = false;
   let result;
   let clock = 0;
@@ -127,9 +130,28 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     if (closed) {
       left = true;
       pendingAnswer = false;
+      if (ranked) player().setEnabled(true);
       return;
     }
-    if (message.type === "hello" && knownHero(message.hero)) {
+    if (ranked && message.type === "room-status") {
+      roomPaused = message.status === "disconnected";
+      player().setEnabled(!roomPaused);
+      pendingAnswer = false;
+    } else if (ranked && message.type === "self-pose" && point(message) && map.canWalk(message.x, message.z)) {
+      player().reset({ x: message.x, z: message.z, yaw: map.spawn.yaw });
+    } else if (ranked && message.type === "error" && message.code === "rating-unavailable") {
+      ranking = { reason: "expired", outcome: "expired" };
+      player().setEnabled(true);
+      paint();
+    } else if (ranked && message.type === "ranking" && message.matchId === connection.matchId
+      && ["win", "loss", "draw", "expired"].includes(message.outcome)) {
+      if (ranking) return;
+      ranking = message;
+      pendingAnswer = false;
+      player().setEnabled(true);
+      settle();
+      paint();
+    } else if (!ranked && message.type === "hello" && knownHero(message.hero)) {
       if (message.version !== matchVersion || typeof message.signature !== "boolean") {
         versionMismatch = true;
         return;
@@ -146,11 +168,11 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       && map.canWalk(message.x, message.z)) {
       other.x = message.x;
       other.z = message.z;
-    } else if (message.type === "state" && side === 1) {
+    } else if (message.type === "state" && (ranked || side === 1)) {
       const received = readSnapshot(message.state);
       if (!received || versionMismatch || (snapshot && received.time < snapshot.time)
         || received.fighters[side].hero !== hero || received.fighters[side].signature !== signature
-        || !ROUTES.some((item) => item.id === message.route)) return;
+        || (ranked ? message.route !== route : !ROUTES.some((item) => item.id === message.route))) return;
       matchRoute = message.route;
       const wasPending = snapshot?.pending;
       snapshot = received;
@@ -176,7 +198,9 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     use(Number(event.code.slice(-1)) - 1);
   }
 
-  function isActive() { return Boolean(snapshot) && !left && !versionMismatch && snapshot.winner === null; }
+  function isActive() {
+    return Boolean(snapshot) && !left && !versionMismatch && !ranking && !roomPaused && snapshot.winner === null;
+  }
 
   function dodge() {
     if (!isActive() || clock < dodgeReadyAt || !player().dodge()) return;
@@ -214,9 +238,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   function canvasFocus() { get("world").focus({ preventScroll: true }); }
 
   function settle() {
-    if (finished || snapshot?.winner == null) return;
+    if (finished || (ranked ? !ranking : snapshot?.winner == null)) return;
     finished = true;
-    const outcome = snapshot.winner === "draw" ? "draw" : snapshot.winner === side ? "win" : "loss";
+    if (ranked && ranking.reason !== "complete") return;
+    const outcome = ranked ? ranking.outcome : snapshot.winner === "draw" ? "draw" : snapshot.winner === side ? "win" : "loss";
     void Promise.resolve(onComplete(outcome, solo ? "practice" : "friend")).then((value) => {
       result = value;
       if (!disposed) paint();
@@ -226,10 +251,12 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   function paint() {
     const local = snapshot?.fighters[side];
     const rival = snapshot?.fighters[remoteSide];
-    const mode = solo ? "Practice duel" : "Friend duel";
+    const mode = ranked ? "Ranked duel" : solo ? "Practice duel" : "Friend duel";
     label(get("duel-battle-name"), mode);
     label(get("duel-you"), `${displayName(local?.hero ?? hero)} · Lv ${progress.level}`);
-    label(get("duel-rival"), displayName(rival?.hero ?? enemy));
+    const rivalHero = displayName(rival?.hero ?? enemy);
+    label(get("duel-rival"), ranked && connection.rivalName ? connection.rivalName : rivalHero);
+    get("duel-rival").title = ranked ? rivalHero : "";
     fillMeter("you", local);
     fillMeter("rival", rival);
     const active = isActive();
@@ -247,9 +274,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       const button = spells[index];
       const remaining = local?.cooldowns[index] ?? 0;
       const locked = index === 3 && !signature;
-      const text = locked ? signatureCostLabel : `${styleNames[skill.style]} · ${skill.damage} dmg · ${remaining > 0 ? Math.ceil(remaining) + "s left" : skill.cooldown + "s CD"}`;
+      const text = locked ? (ranked ? "Casual matches" : signatureCostLabel) : `${styleNames[skill.style]} · ${skill.damage} dmg · ${remaining > 0 ? Math.ceil(remaining) + "s left" : skill.cooldown + "s CD"}`;
       button.disabled = !active || Boolean(pending) || locked || remaining > 0;
-      button.title = locked ? `Train this skill at your hero stone with ${SIGNATURE_PRICE} gold at level ${SIGNATURE_LEVEL}.` : `${tiers[index]} · ${skill.description}`;
+      button.title = locked ? (ranked ? "Ranked matches use each hero's three base skills."
+        : `Train this skill at your hero stone with ${SIGNATURE_PRICE} gold at level ${SIGNATURE_LEVEL}.`) : `${tiers[index]} · ${skill.description}`;
       button.dataset.tier = tiers[index].toLowerCase();
       button.dataset.locked = String(locked);
       label(button.querySelector("strong"), skill.name);
@@ -257,15 +285,19 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       button.style.setProperty("--cooldown", `${100 * remaining / skill.cooldown}%`);
       button.setAttribute("aria-label", `${skill.name}, ${text}. ${effectNames[skill.effect] ?? skill.effect}.`);
     });
-    const winner = snapshot?.winner;
-    const ended = winner != null;
+    const winner = ranking?.outcome === "win" ? side : ranking?.outcome === "loss" ? remoteSide
+      : ranking?.outcome === "draw" ? "draw" : snapshot?.winner;
+    const ended = winner != null || Boolean(ranking) || (ranked && left);
     const position = playerPosition();
     const danger = active && snapshot.attacks.some((attack) => attack.side !== side && attack.phase === "telegraph"
       && Math.hypot(position.x - attack.x, position.z - attack.z) <= attack.radius + .4);
-    const message = ended ? `${winner === "draw" ? "A draw." : winner === side ? "You won!" : "Your rival won."} Head to the return arch.`
+    const message = ranking?.outcome === "expired" ? "Match ended without a score."
+      : ranked && left && winner == null ? "Connection to Ranked Arena ended."
+        : ended ? `${winner === "draw" ? "A draw." : winner === side ? "You won!" : "Your rival won."} ${ranked ? "" : "Head to the return arch."}`.trim()
       : versionMismatch ? "Both players need to refresh the game before duelling."
         : left ? "Your friend disconnected. The return arch is behind you."
-          : !snapshot ? "Meeting your rival…"
+          : roomPaused ? "Waiting for your rival to reconnect…"
+            : !snapshot ? "Meeting your rival…"
             : danger ? "Move out of the marked circle!"
               : pending ? `Answer to cast ${HEROES[hero].skills[pending.slot].name}.`
                 : statusUntil > clock ? status : "Move out of the path of incoming spells.";
@@ -280,8 +312,27 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     label(get("duel-controls"), active ? `WASD move · F ${dodgeIn ? "dodge in " + dodgeIn + "s" : "dodge"} · ${signature ? "1–4" : "1–3"} cast` : "");
     get("duel-skills").hidden = ended;
     get("duel-result").hidden = !ended;
-    if (ended) paintRewards();
-    get("world").dataset.duelWinner = snapshot?.winner === null || snapshot?.winner === undefined ? "" : String(snapshot.winner);
+    if (ended && (!ranked || ranking?.reason === "complete")) paintRewards();
+    if (ranked && ended) paintRanking();
+    for (const id of ["ranked-result", "ranked-again", "ranked-board"]) get(id).hidden = !ranked || !ended;
+    get("ranked-again").disabled = ranked && !ranking && !left;
+    get("ranked-board").disabled = ranked && !ranking && !left;
+    get("world").dataset.duelWinner = winner == null ? "" : String(winner);
+  }
+
+  function paintRanking() {
+    if (ranking?.reason !== "complete") {
+      label(get("duel-reward"), "");
+      label(get("duel-growth"), "");
+    }
+    const profile = ranking?.profile;
+    if (ranking?.outcome !== "expired" && Number.isSafeInteger(profile?.rating) && Number.isSafeInteger(ranking?.delta)) {
+      const tier = profile.games < 3 ? `Placement ${profile.games}/3` : profile.rank;
+      const delta = ranking.delta >= 0 ? `+${ranking.delta}` : String(ranking.delta);
+      label(get("ranked-result"), `${tier} · ${profile.rating} Elo (${delta})`);
+    } else {
+      label(get("ranked-result"), ranking ? "No change to your rating." : left ? "Check your result on the leaderboard." : "Calculating rating…");
+    }
   }
 
   function paintRewards() {
@@ -427,8 +478,12 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   spells.forEach((button, index) => button.addEventListener("click", () => use(index), { signal: flags.signal }));
   answers.forEach((button, index) => button.addEventListener("click", () => use(index), { signal: flags.signal }));
   dodgeButton.addEventListener("click", dodge, { signal: flags.signal });
+  if (ranked) {
+    get("ranked-again").addEventListener("click", () => onRankedAction(true), { signal: flags.signal });
+    get("ranked-board").addEventListener("click", () => onRankedAction(false), { signal: flags.signal });
+  }
   connection?.listen(handlePacket);
-  connection?.send({ type: "hello", hero, signature, version: matchVersion });
+  if (!ranked) connection?.send({ type: "hello", hero, signature, version: matchVersion });
   ui.hidden = false;
   document.body.dataset.duel = "true";
   paint();

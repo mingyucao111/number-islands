@@ -3,3 +3,4 @@
 .env.*
 *.generated.json
 node_modules/
+/.ranked-data/

@@ -20,6 +20,8 @@ Gale can dash, hurry other spells and pierce a ward. Warden has shields, ember c
 
 - **Practice:** Walk through the **Practice arena** arch to duel a computer opponent.
 - **Friend duel:** Use the **Friend duel** arch. One player creates and shares an invite link. The other opens it, creates a reply code and sends the code back. The host pastes the reply and both enter the same real-time arena. The host’s grade band determines the maths for both players. It uses a direct WebRTC data connection, so some network combinations cannot connect without a relay.
+- **Ranked Arena:** Use the purple arch on the right of the pier and choose **Find match**. The game searches for another player in your current grade band, starting with a 100-point Elo range. The range widens with time, while the grade band stays fixed. After a duel, choose **Find next match** to queue again from the result. When nobody eligible is online, the search keeps waiting for a real player.
+- **Rank and leaderboard:** Ratings start at 1,000 for each grade band. Finish three placement games in that band to appear on its leaderboard. The tiers run from Bronze through Silver, Gold, Platinum and Diamond. Ranked uses each hero's three base skills and the same dodge recharge for everyone. The server verifies answers and judges matches before recording results. Guests use generated nicknames and a browser token instead of an email or real name.
 - **Skills:** Move within range and press **1**, **2** or **3** to choose a spell. Use **1–3** to answer the maths question, or tap the skill and answer controls. A correct answer launches a spell in the world. Bolts and waves travel along a line. An area spell marks its impact zone first. Enemy damage requires a hit. Wrong or late answers still use the skill's cooldown.
 - **Dodging:** Move while answering with WASD or the touch stick. Press **F** or tap **Dodge** to dash in the direction you are moving. Dodge starts with a 2.8-second recharge, which gets shorter at levels 3–5. Walk to the return arch and interact to leave, or press **Esc**.
 - **Hero growth:** A completed practice or friend duel earns XP and gold for the hero you played. A practice win earns 60 XP and 35 gold. At level 2, return to that hero's stone and spend 30 gold to learn their signature spell. **4** or the fourth skill button casts Gale's Slipstream, Warden's Moonwall or Ember's Phoenix Bloom once learned. Hero levels, gold and learned skills are saved in the current browser.
@@ -68,3 +70,14 @@ node --test
 ```
 
 Tests cover curriculum bounds, Lumi’s policy, the harbour economy, arcade generators, PPTX decoding, local lesson generation, mocked model responses, arena combat and friend invite transport. The public game and player progress use local browser storage and have no student accounts or analytics. The repository uses GitHub Pages with no web build step.
+
+### Ranked server
+
+The GitHub Pages game connects to the Railway ranked service over a secure WebSocket. To run ranked matches on your own computer, use two independent browser profiles on the same local game URL.
+
+```sh
+npm ci
+npm start
+```
+
+The service uses Node.js 24 and listens on port 8787 by default. Serve the game separately on localhost, as shown above. The server keeps ratings and match results in SQLite. It stores the database under `.ranked-data/` locally and uses the mounted Railway volume in production. No email, real name or chat is required. For a custom setup, use `RANKED_DATABASE` to set the database path, `RANKED_ORIGINS` for allowed web origins and `PORT` to set the port.

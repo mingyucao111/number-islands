@@ -12,6 +12,7 @@ import { HEROES } from "./combat-rules.mjs";
 import { awardDuel, heroProgress, learnSignature, openHeroGrowth, SIGNATURE_LEVEL, SIGNATURE_PRICE } from "./hero-growth.mjs";
 import { createArenaDuel } from "./duel.mjs";
 import { createDuelLobby } from "./duel-lobby.mjs";
+import { createRankedLobby } from "./ranked-lobby.mjs";
 
 const SAVE = "number-islands-campaign-v1";
 const LEGACY_SAVE = "number-islands-last-light-v1";
@@ -78,6 +79,7 @@ const coastExit = Object.freeze({ x: 10, y: 0, z: -23 });
 const replayBell = Object.freeze({ x: 3.4, y: 0, z: 20.1 });
 const practiceGate = Object.freeze({ x: 12.2, y: 0, z: 19.2 });
 const friendGate = Object.freeze({ x: 9.8, y: 0, z: 17 });
+const rankedGate = Object.freeze({ x: 6.5, y: 0, z: 16.8 });
 
 function closeTo(position, point, radius) {
   return point && Math.abs(position.y - point.y) < 1.45
@@ -95,6 +97,7 @@ function createCoast(root, route, home, selectedHero) {
   const ferry = buildPassage(root, coastExit, "Windwood crossing");
   const practice = buildPassage(root, practiceGate, "Practice arena", 0x83d8bc);
   const friends = buildPassage(root, friendGate, "Friend duel", 0xf3ba92);
+  const ranked = buildPassage(root, rankedGate, "Ranked Arena", 0xd2b9fa);
   const shrines = buildHeroShrines(root, HEROES, world);
   const bell = home ? buildPassage(root, replayBell, "Voyage bell") : null;
   if (home) quest.restoreComplete();
@@ -114,6 +117,7 @@ function createCoast(root, route, home, selectedHero) {
       bell?.update(time);
       practice.update(time);
       friends.update(time);
+      ranked.update(time);
       stones.forEach((stone) => stone.update(time, stone.id === route.id));
       shrines.forEach((shrine) => shrine.update(time, shrine.hero.id === selectedHero()));
     },
@@ -189,6 +193,9 @@ export function startVoyage() {
   };
 
   const lobby = createDuelLobby({ onEnter: enterDuel, onDismiss() {
+    if (!duel) player?.setEnabled(!paused);
+  } });
+  const rankedLobby = createRankedLobby({ onEnter: enterDuel, onDismiss() {
     if (!duel) player?.setEnabled(!paused);
   } });
 
@@ -311,6 +318,7 @@ export function startVoyage() {
     }
     if (closeTo(position, practiceGate, 1.48)) return { type: "practice", label: "Enter the practice arena", loc: practiceGate };
     if (closeTo(position, friendGate, 1.48)) return { type: "friend", label: "Play a friend duel", loc: friendGate };
+    if (closeTo(position, rankedGate, 1.48)) return { type: "ranked", label: "Open Ranked Arena", loc: rankedGate };
     if (region.home && closeTo(position, replayBell, 1.55)) {
       return { type: "replay", label: "Ring the voyage bell", loc: replayBell };
     }
@@ -337,9 +345,12 @@ export function startVoyage() {
     arenaGroup = new THREE.Group();
     scene.add(arenaGroup);
     const hero = selectedHero;
-    const matchId = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(36)).join("-");
+    const matchId = connection?.matchId ?? Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(36)).join("-");
     duel = createArenaDuel(arenaGroup, { route: route.id, hero, progress: heroProgress(growth, hero), connection,
-      player: () => player, sound, onExit: leaveDuel, async onComplete(outcome, mode) {
+      player: () => player, sound, onExit: leaveDuel, onRankedAction(again) {
+        leaveDuel();
+        openRanked(again);
+      }, async onComplete(outcome, mode) {
         const { state, reward } = await updateHeroGrowth((current) => awardDuel(current, { matchId, hero, mode, outcome }));
         return { reward, progress: heroProgress(state, hero) };
       } });
@@ -363,6 +374,7 @@ export function startVoyage() {
     arenaPassage = undefined;
     scene.add(group);
     player.reset(arenaReturn);
+    player.setEnabled(true);
     player.setCarried(arenaReturn.carried);
     arenaReturn = undefined;
     refreshGrowth();
@@ -376,8 +388,13 @@ export function startVoyage() {
     lobby.open(prefill);
   }
 
+  function openRanked(again = false) {
+    player.setEnabled(false);
+    rankedLobby.open(route, selectedHero, again);
+  }
+
   function consumeInvite() {
-    if (duel || lobby.isOpen() || !location.hash.startsWith("#duel=")) return;
+    if (duel || lobby.isOpen() || rankedLobby.isOpen() || !location.hash.startsWith("#duel=")) return;
     const code = location.hash;
     history.replaceState(history.state, "", location.pathname + location.search);
     openLobby(code);
@@ -422,6 +439,7 @@ export function startVoyage() {
     }
     if (action.type === "practice") { enterDuel(); return; }
     if (action.type === "friend") { openLobby(); return; }
+    if (action.type === "ranked") { openRanked(); return; }
     if (action.type === "exit") {
       if (index >= CHAPTERS.length - 1) {
         campaign = returnHome(campaign);
@@ -541,7 +559,7 @@ export function startVoyage() {
   }
 
   window.addEventListener("keydown", (event) => {
-    if (lobby.isOpen()) return;
+    if (lobby.isOpen() || rankedLobby.isOpen()) return;
     if (event.code === "Escape" && !event.repeat) {
       if (duel) { duel.leave(); return; }
       paused = !paused;
