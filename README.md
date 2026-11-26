@@ -12,6 +12,22 @@ A third-person 3D adventure. Land at Alderreach, awaken the Hollow Tree in Windw
 
 If you restored the lighthouse in the original single-chapter release, the new campaign carries forward the XP and opens Windwood on that route.
 
+## Windstone Arena
+
+Walk to the hero stones on the right side of the pier. Use **E** or the touch interact button to choose Gale, Warden or Ember. Your outfit and spell kit follow that choice into the arena, and the choice is saved in this browser.
+
+Gale can dash, hurry other spells and pierce a ward. Warden has shields, ember cleansing and warded healing. Ember can heal and leave a damage-over-time glow.
+
+- **Practice:** Walk through the **Practice arena** arch to duel a computer opponent.
+- **Friend duel:** Use the **Friend duel** arch. One player creates and shares an invite link. The other opens it, creates a reply code and sends the code back. The host pastes the reply and both enter the same real-time arena. The host’s grade band determines the maths for both players. It uses a direct WebRTC data connection, so some network combinations cannot connect without a relay.
+- **Skills:** Move within range and press **1**, **2** or **3** to choose a spell. Use the same keys to answer the maths question, or tap the skill and answer controls. A correct answer deals damage and applies the spell’s distinct effect. Wrong or late answers still use that skill’s cooldown. Walk to the return arch and interact to leave, or press **Esc**.
+
+| Skill tier | Base damage | Cooldown |
+| --- | ---: | ---: |
+| Easy | 10 | 2.5 seconds |
+| Medium | 20 | 5.5 seconds |
+| Hard | 36 | 10 seconds |
+
 The 3D renderer is the MIT-licensed Three.js r183. The scene, character and tasks were built for Number Islands. [Three.js license](voyage/vendor/LICENSE-three.txt)
 
 ## Island Atlas
@@ -49,4 +65,4 @@ Use the live link above or serve the repository locally with `python3 -m http.se
 node --test
 ```
 
-Tests cover curriculum bounds, Lumi’s policy, the harbour economy, arcade generators, PPTX decoding, local lesson generation and mocked model responses. The public game and player progress use local browser storage and have no student accounts or analytics. The repository uses GitHub Pages with no web build step.
+Tests cover curriculum bounds, Lumi’s policy, the harbour economy, arcade generators, PPTX decoding, local lesson generation, mocked model responses, arena combat and friend invite transport. The public game and player progress use local browser storage and have no student accounts or analytics. The repository uses GitHub Pages with no web build step.

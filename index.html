@@ -7,6 +7,7 @@
   <meta name="description" content="Explore three islands, grow your wind abilities, and bring the light home in an original third-person adventure.">
   <title>Number Islands · The Last Light</title>
   <link rel="stylesheet" href="voyage/voyage.css">
+  <link rel="stylesheet" href="voyage/duel.css">
   <link rel="icon" href="icons/islands-192.png" type="image/png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -46,6 +47,44 @@
       </div>
       <p class="quick-controls">WASD move <span>·</span> Drag to look <span>·</span> E interact <span>·</span> Space jump</p>
     </section>
+    <section class="duel-hud" id="duel-hud" hidden aria-label="Duel controls">
+      <div class="duel-bars">
+        <div class="duel-life"><div><strong id="duel-you"></strong><span id="duel-you-hp"></span></div><meter id="duel-you-bar" min="0" max="100" value="100"></meter></div>
+        <div class="duel-battle-name" id="duel-battle-name">Duel</div>
+        <div class="duel-life rival"><div><strong id="duel-rival"></strong><span id="duel-rival-hp"></span></div><meter id="duel-rival-bar" min="0" max="100" value="100"></meter></div>
+      </div>
+      <p class="duel-log" id="duel-log" aria-live="polite"></p>
+      <div id="duel-question" class="duel-question" hidden>
+        <div class="question-line"><strong id="duel-question-text"></strong><span id="duel-seconds"></span></div>
+        <div class="answer-options" id="duel-answers">
+          <button type="button" data-duel-answer="0" aria-keyshortcuts="1"><kbd>1</kbd><span></span></button>
+          <button type="button" data-duel-answer="1" aria-keyshortcuts="2"><kbd>2</kbd><span></span></button>
+          <button type="button" data-duel-answer="2" aria-keyshortcuts="3"><kbd>3</kbd><span></span></button>
+        </div>
+      </div>
+      <div class="duel-skills" id="duel-skills" aria-label="Skills">
+        <button type="button" data-duel-slot="0" aria-keyshortcuts="1"><kbd>1</kbd><strong></strong><span></span><i></i></button>
+        <button type="button" data-duel-slot="1" aria-keyshortcuts="2"><kbd>2</kbd><strong></strong><span></span><i></i></button>
+        <button type="button" data-duel-slot="2" aria-keyshortcuts="3"><kbd>3</kbd><strong></strong><span></span><i></i></button>
+      </div>
+    </section>
+    <dialog id="duel-lobby" class="duel-lobby" aria-labelledby="duel-lobby-title">
+      <h2 id="duel-lobby-title">Friend duel</h2>
+      <p>Invite a friend for a real-time duel. Share your invite, then open their reply here.</p>
+      <button type="button" id="duel-make-invite">Create invite</button>
+      <div id="duel-output" hidden>
+        <label for="duel-share-code" id="duel-output-label">Invite link</label>
+        <textarea id="duel-share-code" readonly rows="2"></textarea>
+        <button type="button" id="duel-copy">Copy</button>
+      </div>
+      <label for="duel-paste">Friend's invite or reply</label>
+      <textarea id="duel-paste" rows="2" maxlength="36000" spellcheck="false" autocomplete="off"></textarea>
+      <div class="duel-link-actions">
+        <button type="button" id="duel-connect">Use friend code</button>
+        <button type="button" id="duel-cancel">Return to the island</button>
+      </div>
+      <p id="duel-link-status" role="status"></p>
+    </dialog>
     <div id="chapter-banner" class="chapter-banner" aria-live="polite" hidden><p></p><h1></h1><span></span></div>
     <div id="paused" class="paused" hidden>Voyage paused <span>Press Esc to continue</span></div>
     <div id="load-message" class="load-message" role="status">Approaching the coast…</div>

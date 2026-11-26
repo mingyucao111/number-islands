@@ -80,12 +80,36 @@ export function buildPassage(root, point, text, tint = 0xe0ba69) {
   const rim = new THREE.Mesh(new THREE.TorusGeometry(.7, .043, 7, 36), border);
   rim.position.y = 1.32;
   group.add(rim);
-  const label = makeLabel(text, 340);
-  label.position.y = 3.66;
-  group.add(label);
+  if (text) {
+    const label = makeLabel(text, 340);
+    label.position.y = 3.66;
+    group.add(label);
+  }
   root.add(group);
   return {
     set visible(value) { group.visible = value; },
     update(time) { rim.rotation.y = time * .44; rim.position.y = 1.32 + Math.sin(time * 2.1) * .11; },
   };
+}
+
+export function buildHeroShrines(root, heroes, terrain) {
+  const locations = [[4.4, 22], [7, 21.8], [9.6, 21]];
+  return Object.values(heroes).map((hero, index) => {
+    const [x, z] = locations[index];
+    const y = terrain.heightAt(x, z);
+    const point = { x, y, z };
+    stoneBase(root, point);
+    const colour = [0x6fdfc3, 0xf5cb72, 0xffa589][index];
+    const symbol = new THREE.Mesh(index === 1 ? new THREE.DodecahedronGeometry(.33) : new THREE.OctahedronGeometry(.36),
+      new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: .18, roughness: .4 }));
+    const name = makeLabel(hero.name, 292);
+    symbol.position.set(x, y + 1.08, z);
+    name.position.set(x, y + 1.88, z);
+    root.add(symbol, name);
+    return { hero, point, update(time, selected) {
+      symbol.rotation.y = time * .74 + index;
+      symbol.position.y = y + 1.1 + Math.sin(time * 2 + index) * .08;
+      symbol.material.emissiveIntensity = selected ? .58 : .16;
+    } };
+  });
 }

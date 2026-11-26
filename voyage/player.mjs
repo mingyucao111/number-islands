@@ -105,19 +105,7 @@ function createExplorer() {
   const capeColumns = 12;
   const capeGeometry = new THREE.PlaneGeometry(1, 1, capeColumns, capeRows);
   const positions = capeGeometry.attributes.position;
-  const tones = [];
-  for (let row = 0; row <= capeRows; row++) {
-    for (let column = 0; column <= capeColumns; column++) {
-      const trim = column === 0 || column === capeColumns || row >= capeRows - 1;
-      const seam = column === Math.floor(capeColumns / 2);
-      const badge = Math.abs(column - capeColumns / 2) + Math.abs(row - 4) <= 1;
-      const base = trim || badge ? 0xdfaf62 : seam ? 0x6c8562 : 0x436d54;
-      const color = new THREE.Color(base);
-      if (!trim && column % 2 === 0) color.multiplyScalar(0.84);
-      tones.push(color.r, color.g, color.b);
-    }
-  }
-  capeGeometry.setAttribute("color", new THREE.Float32BufferAttribute(tones, 3));
+  capeGeometry.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(positions.count * 3), 3));
   const cape = new THREE.Mesh(capeGeometry, capeMaterial);
   cape.frustumCulled = false;
   cape.castShadow = true;
@@ -127,6 +115,46 @@ function createExplorer() {
   cargo.name = "Carried cargo";
   cargo.position.set(0.56, 0.94, -0.31);
   model.add(cargo);
+
+  const charm = new THREE.Group();
+  charm.position.set(.29, 1.16, .22);
+  model.add(charm);
+  const charmMaterial = new THREE.MeshStandardMaterial({ roughness: .42, metalness: .19 });
+  const ornaments = [
+    mesh(charm, new THREE.TorusGeometry(.13, .026, 6, 14), charmMaterial, [0, 0, 0], [1, 1.4, 1], false),
+    mesh(charm, new THREE.CylinderGeometry(.13, .13, .06, 6), charmMaterial, [0, 0, 0], [1, 1, 1], false),
+    mesh(charm, new THREE.OctahedronGeometry(.13), charmMaterial, [0, 0, 0], [1, 1.6, 1], false),
+  ];
+  ornaments[1].rotation.x = Math.PI / 2;
+  const outfits = {
+    gale: [0x285951, 0x5a9284, 0xcfe8b8, 0xdceda8, 0x538a7c],
+    warden: [0x695733, 0xaa854a, 0xffd177, 0xffd177, 0x8c713d],
+    ember: [0x8e403c, 0xc97055, 0xffd6b6, 0xffae81, 0xaa5a52],
+  };
+
+  function setHero(id) {
+    const [body, hood, scarf, trim, cloth] = outfits[id] ?? outfits.gale;
+    leaf.color.setHex(body);
+    hoodMaterial.color.setHex(hood);
+    linen.color.setHex(scarf);
+    charmMaterial.color.setHex(trim);
+    charmMaterial.emissive.setHex(trim);
+    charmMaterial.emissiveIntensity = .15;
+    const selected = id === "warden" ? 1 : id === "ember" ? 2 : 0;
+    ornaments.forEach((ornament, index) => { ornament.visible = index === selected; });
+    const attribute = capeGeometry.attributes.color;
+    const tint = new THREE.Color();
+    for (let row = 0; row <= capeRows; row++) {
+      for (let col = 0; col <= capeColumns; col++) {
+        const isTrim = col === 0 || col === capeColumns || row >= capeRows - 1;
+        const badge = Math.abs(col - capeColumns / 2) + Math.abs(row - 4) <= 1;
+        tint.setHex(isTrim || badge ? trim : col === capeColumns / 2 ? hood : cloth);
+        if (!isTrim && col % 2 === 0) tint.multiplyScalar(.86);
+        attribute.setXYZ(row * (capeColumns + 1) + col, tint.r, tint.g, tint.b);
+      }
+    }
+    attribute.needsUpdate = true;
+  }
 
   function animateCape(time, speed, glide) {
     for (let row = 0; row <= capeRows; row++) {
@@ -147,7 +175,8 @@ function createExplorer() {
   }
 
   animateCape(0, 0, 0);
-  return { root, model, arms, legs, cargo, animateCape };
+  setHero("gale");
+  return { root, model, arms, legs, cargo, animateCape, setHero };
 }
 
 function makeContactShadow() {
@@ -195,6 +224,7 @@ export function createPlayer({
   const look = document.querySelector("[data-voyage-look]") ?? canvas;
   const motion = new THREE.Vector2();
   const wanted = new THREE.Vector2();
+  const burst = new THREE.Vector2();
   const aim = new THREE.Vector3();
   const smoothAim = new THREE.Vector3();
   const cameraTarget = new THREE.Vector3();
@@ -220,6 +250,7 @@ export function createPlayer({
   let mobileJump = false;
   let actionQueued = false;
   let recovered = false;
+  let burstSeconds = 0;
   let carried = null;
   let stickPointer = null;
   let lookPointer = null;
@@ -242,6 +273,15 @@ export function createPlayer({
 
   function setWindGlide(enabled) {
     windGlide = Boolean(enabled);
+  }
+
+  function dashToward(x, z) {
+    if (!enabled || carried || !Number.isFinite(x) || !Number.isFinite(z)) return;
+    burst.set(x - position.x, z - position.z);
+    const length = burst.length();
+    if (length < 2.6) return;
+    burst.normalize().multiplyScalar(11.5);
+    burstSeconds = Math.min(.23, (length - 2) / 11.5);
   }
 
   function setWindLift(enabled) {
@@ -419,6 +459,7 @@ export function createPlayer({
     recovered = false;
     lastSafe.copy(position);
     motion.set(0, 0);
+    burstSeconds = 0;
     yaw = candidate.yaw;
     yawTarget = poseYaw = yaw;
     pitch = pitchTarget = 0.38;
@@ -439,6 +480,10 @@ export function createPlayer({
     clearInput();
     recovered = true;
     updateCamera(0, true);
+  }
+
+  function checkpoint() {
+    return { x: lastSafe.x, z: lastSafe.z, yaw, carried };
   }
 
   function updateShadow() {
@@ -465,6 +510,10 @@ export function createPlayer({
     const speed = carried ? WALK_SPEED * 0.75 : running ? RUN_SPEED : WALK_SPEED;
     wanted.set(sideways * Math.cos(yaw) - forward * Math.sin(yaw),
       -sideways * Math.sin(yaw) - forward * Math.cos(yaw)).clampLength(0, 1).multiplyScalar(speed);
+    if (burstSeconds > 0) {
+      wanted.copy(burst);
+      burstSeconds -= dt;
+    }
     motion.lerp(wanted, smoothing(wanted.lengthSq() ? 18 : 23, dt));
     if (motion.lengthSq() < 0.003) motion.set(0, 0);
 
@@ -554,5 +603,5 @@ export function createPlayer({
   }
 
   reset();
-  return { position, setCarried, setWindGlide, setWindLift, setEnabled, takeInteract, takeRecovery, update, reset, dispose };
+  return { position, setCarried, setWindGlide, setWindLift, setEnabled, setHero: explorer.setHero, dashToward, takeInteract, takeRecovery, checkpoint, update, reset, dispose };
 }
