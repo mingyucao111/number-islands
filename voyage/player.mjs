@@ -5,6 +5,9 @@ const RUN_SPEED = 7.1;
 const GRAVITY = 16;
 const STEP_UP = 0.43;
 const STEP_DOWN = 0.58;
+const GAP_FALL = 2.8;
+const MAX_WIND_RISE = 9;
+const FLIGHT_CLEARANCE = 0.08;
 
 const motionKeys = new Set([
   "KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
@@ -196,20 +199,27 @@ export function createPlayer({
   const smoothAim = new THREE.Vector3();
   const cameraTarget = new THREE.Vector3();
   const cameraProbe = new THREE.Vector3();
+  const lastSafe = new THREE.Vector3();
+  let activeSpawn = { x: spawn.x, z: spawn.z, yaw: spawn.yaw ?? 0 };
   let yaw = spawn.yaw ?? 0;
   let pitch = 0.38;
   let yawTarget = yaw;
   let pitchTarget = pitch;
   let poseYaw = yaw;
   let floor = 0;
+  let supported = true;
+  let recoveryFloor = 0;
   let clock = 0;
   let pace = 0;
   let verticalSpeed = 0;
   let glideBlend = 0;
   let windGlide = false;
+  let windLift = false;
+  let enabled = true;
   let jumpPressed = false;
   let mobileJump = false;
   let actionQueued = false;
+  let recovered = false;
   let carried = null;
   let stickPointer = null;
   let lookPointer = null;
@@ -234,12 +244,27 @@ export function createPlayer({
     windGlide = Boolean(enabled);
   }
 
+  function setWindLift(enabled) {
+    windLift = Boolean(enabled);
+  }
+
+  function setEnabled(value) {
+    enabled = Boolean(value);
+    if (!enabled) clearInput();
+  }
+
+  function takeRecovery() {
+    const tookRecovery = recovered;
+    recovered = false;
+    return tookRecovery;
+  }
+
   function isFormControl(target) {
     return Boolean(target?.closest?.("textarea, input, select, [contenteditable=true]"));
   }
 
   listen(view, "keydown", (event) => {
-    if (!motionKeys.has(event.code) || isFormControl(event.target)) return;
+    if (!enabled || !motionKeys.has(event.code) || isFormControl(event.target)) return;
     if (event.code === "Space" && event.target?.closest?.("button")) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
@@ -263,9 +288,9 @@ export function createPlayer({
 
   listen(view, "blur", clearInput);
   listen(document, "visibilitychange", () => { if (document.hidden) clearInput(); });
-  listen(interact, "click", () => { actionQueued = true; });
+  listen(interact, "click", () => { if (enabled) actionQueued = true; });
   listen(jumpButton, "pointerdown", (event) => {
-    if (event.button !== 0) return;
+    if (!enabled || event.button !== 0) return;
     event.preventDefault();
     jumpButton.setPointerCapture?.(event.pointerId);
     jumpPressed = true;
@@ -274,7 +299,7 @@ export function createPlayer({
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
     listen(jumpButton, event, () => { mobileJump = false; });
   }
-  listen(jumpButton, "click", (event) => { if (event.detail === 0) jumpPressed = true; });
+  listen(jumpButton, "click", (event) => { if (enabled && event.detail === 0) jumpPressed = true; });
 
   // Both pointer sources work with touch, pen, and mouse.
   function moveStick(event) {
@@ -286,7 +311,7 @@ export function createPlayer({
     if (thumb) thumb.style.translate = `${axes.x * radius}px ${axes.y * radius}px`;
   }
   listen(stick, "pointerdown", (event) => {
-    if (event.button !== 0 || stickPointer !== null) return;
+    if (!enabled || event.button !== 0 || stickPointer !== null) return;
     event.preventDefault();
     stickPointer = event.pointerId;
     stick.setPointerCapture?.(event.pointerId);
@@ -304,7 +329,7 @@ export function createPlayer({
 
   listen(look, "contextmenu", (event) => event.preventDefault());
   listen(look, "pointerdown", (event) => {
-    if ((event.button !== 0 && event.button !== 2) || lookPointer) return;
+    if (!enabled || (event.button !== 0 && event.button !== 2) || lookPointer) return;
     lookPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
     look.setPointerCapture?.(event.pointerId);
     if (event.pointerType !== "touch") canvas.focus?.({ preventScroll: true });
@@ -320,16 +345,32 @@ export function createPlayer({
     listen(look, event, (input) => { if (input.pointerId === lookPointer?.id) lookPointer = null; });
   }
 
+  function isGrounded() {
+    return supported && position.y <= floor + 0.035 && verticalSpeed <= 0;
+  }
+
+  function stepSurface(x, z) {
+    const height = world.heightAt(x, z);
+    return Number.isFinite(height) && world.canWalk(x, z) ? height : null;
+  }
+
   function slide(dx, dz) {
     if (!dx && !dz) return true;
     const x = position.x + dx;
     const z = position.z + dz;
-    if (!world.canWalk(x, z)) return false;
-    const nextFloor = world.heightAt(x, z);
-    if (!Number.isFinite(nextFloor) || nextFloor - floor > STEP_UP || (!windGlide && floor - nextFloor > STEP_DOWN)) {
-      return false;
+    const nextFloor = stepSurface(x, z);
+    if (nextFloor !== null) {
+      const clearance = isGrounded() ? floor + STEP_UP : position.y + FLIGHT_CLEARANCE;
+      if (nextFloor > clearance || (isGrounded() && floor - nextFloor > STEP_DOWN && !windGlide)) return false;
+      floor = nextFloor;
+      supported = true;
+    } else {
+      const inAir = !supported || position.y > floor + FLIGHT_CLEARANCE || verticalSpeed > 0.25;
+      if (!windGlide || carried || !inAir || !world.canGlide?.(x, z, position.y)) return false;
+      supported = false;
+      const surface = world.heightAt(x, z);
+      recoveryFloor = Number.isFinite(surface) ? Math.min(surface, lastSafe.y) : lastSafe.y;
     }
-    floor = nextFloor;
     position.x = x;
     position.z = z;
     return true;
@@ -360,12 +401,25 @@ export function createPlayer({
     camera.lookAt(smoothAim);
   }
 
-  function reset() {
+  function reset(spawnOverride) {
+    const candidate = {
+      x: spawnOverride?.x ?? activeSpawn.x,
+      z: spawnOverride?.z ?? activeSpawn.z,
+      yaw: spawnOverride?.yaw ?? activeSpawn.yaw,
+    };
+    const valid = Number.isFinite(candidate.x) && Number.isFinite(candidate.z) && Number.isFinite(candidate.yaw);
+    const height = valid ? stepSurface(candidate.x, candidate.z) : null;
+    if (height === null) throw new RangeError("The player spawn needs walkable ground in the active region.");
+    activeSpawn = candidate;
     clearInput();
-    position.set(spawn.x, world.heightAt(spawn.x, spawn.z), spawn.z);
+    position.set(candidate.x, height, candidate.z);
     floor = position.y;
+    recoveryFloor = height;
+    supported = true;
+    recovered = false;
+    lastSafe.copy(position);
     motion.set(0, 0);
-    yaw = spawn.yaw ?? 0;
+    yaw = candidate.yaw;
     yawTarget = poseYaw = yaw;
     pitch = pitchTarget = 0.38;
     verticalSpeed = glideBlend = pace = 0;
@@ -376,7 +430,20 @@ export function createPlayer({
     updateCamera(0, true);
   }
 
+  function recover() {
+    position.copy(lastSafe);
+    floor = lastSafe.y;
+    supported = true;
+    verticalSpeed = glideBlend = 0;
+    motion.set(0, 0);
+    clearInput();
+    recovered = true;
+    updateCamera(0, true);
+  }
+
   function updateShadow() {
+    shadow.visible = supported;
+    if (!supported) return;
     const airborne = Math.max(0, position.y - floor);
     shadow.position.set(position.x, floor + 0.025, position.z);
     shadow.material.opacity = 0.65 / (1 + airborne * 1.9);
@@ -385,7 +452,7 @@ export function createPlayer({
 
   function update(delta) {
     const dt = clamp(delta, 0, 0.075);
-    if (!dt) return;
+    if (!enabled || !dt) return;
     clock += dt;
     if (keys.has("KeyQ")) yawTarget += dt * 1.75;
     if (keys.has("KeyR")) yawTarget -= dt * 1.75;
@@ -404,35 +471,50 @@ export function createPlayer({
     const previousFloor = floor;
     const previousX = position.x;
     const previousZ = position.z;
-    const grounded = position.y <= floor + 0.035 && verticalSpeed <= 0;
+    const grounded = isGrounded();
+    const jumpNow = grounded && jumpPressed;
+    if (jumpNow) verticalSpeed = carried ? 3.8 : 5.1;
+    jumpPressed = false;
     if (!slide(motion.x * dt, motion.y * dt)) {
       slide(motion.x * dt, 0);
       slide(0, motion.y * dt);
     }
     const moved = Math.hypot(position.x - previousX, position.z - previousZ) / dt;
-    const jumpNow = grounded && jumpPressed;
-    if (jumpNow) verticalSpeed = carried ? 3.8 : 5.1;
-    jumpPressed = false;
-    const gliding = windGlide && !carried && verticalSpeed <= 0 && position.y - floor > 0.12
-      && (keys.has("Space") || mobileJump);
-    glideBlend = lerp(glideBlend, Number(gliding), smoothing(10, dt));
+    const held = keys.has("Space") || mobileJump;
+    const wind = windLift && !carried && held ? world.windAt?.(position.x, position.z, position.y) : 0;
+    const lifting = Number.isFinite(wind) && wind > 0;
+    const gliding = windGlide && !carried && verticalSpeed <= 0 && (!supported || position.y - floor > 0.12) && held;
+    glideBlend = lerp(glideBlend, Number(lifting || gliding), smoothing(10, dt));
 
-    if (grounded && !jumpNow && previousFloor - floor < STEP_DOWN) {
+    if (!lifting && supported && grounded && !jumpNow && previousFloor - floor < STEP_DOWN) {
       position.y = floor;
       verticalSpeed = 0;
     } else {
-      verticalSpeed -= dt * (gliding ? GRAVITY * 0.22 : GRAVITY);
-      if (gliding) verticalSpeed = Math.max(-1.6, verticalSpeed);
-      position.y = Math.max(floor, position.y + verticalSpeed * dt);
-      if (position.y === floor) verticalSpeed = 0;
+      if (lifting) {
+        const headroom = lastSafe.y + MAX_WIND_RISE - position.y;
+        const target = Math.min(wind, 9, Math.max(0, headroom / dt));
+        verticalSpeed = Math.min(lerp(verticalSpeed, target, smoothing(8, dt)), headroom / dt);
+      } else {
+        verticalSpeed -= dt * (gliding ? GRAVITY * 0.22 : GRAVITY);
+        if (gliding) verticalSpeed = Math.max(-1.6, verticalSpeed);
+      }
+      position.y += verticalSpeed * dt;
+      if (supported && position.y <= floor) {
+        position.y = floor;
+        verticalSpeed = 0;
+      } else if (!supported && position.y < recoveryFloor - GAP_FALL) {
+        recover();
+      }
     }
+
+    if (isGrounded()) lastSafe.copy(position);
 
     if (wanted.lengthSq() > 0.05) {
       const desiredYaw = Math.atan2(-wanted.x, -wanted.y);
       poseYaw = wrapAngle(poseYaw + wrapAngle(desiredYaw - poseYaw) * smoothing(14, dt));
     }
     explorer.root.rotation.y = poseYaw;
-    const airborne = position.y > floor + 0.085;
+    const airborne = !supported || position.y > floor + 0.085;
     const motionBlend = Math.min(1, moved / WALK_SPEED);
     pace += dt * moved * 3.2;
     explorer.model.position.y = !airborne ? (0.5 - Math.cos(pace * 2) * 0.5) * motionBlend * 0.049 : 0;
@@ -472,5 +554,5 @@ export function createPlayer({
   }
 
   reset();
-  return { position, setCarried, setWindGlide, takeInteract, update, reset, dispose };
+  return { position, setCarried, setWindGlide, setWindLift, setEnabled, takeInteract, takeRecovery, update, reset, dispose };
 }

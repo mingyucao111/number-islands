@@ -616,6 +616,17 @@ export function createQuest({ scene, world, profile } = {}) {
     reset(player);
   }
 
+  function restoreComplete() {
+    Object.assign(state, { stage: "complete", objective: "The light still burns. The harbour is safe.",
+      carried: null, carriedMarks: 0, gateOpen: true, complete: true });
+    beacon.group.add(lens.group);
+    lens.group.position.set(0, .93, 0);
+    gateHeight = 3.33;
+    gate.moving.position.y = gateHeight;
+    gate.status.color.setHex(0xa9e6a6);
+    lanternPower = 1;
+  }
+
   reset();
-  return { state, getPrompt, interact, canPass, update, reset, setProfile, goalForCompass };
+  return { state, getPrompt, interact, canPass, update, reset, setProfile, restoreComplete, goalForCompass };
 }

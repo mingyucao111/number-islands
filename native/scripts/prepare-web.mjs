@@ -10,6 +10,7 @@ const output = join(nativeRoot, "www");
 const files = [
   "index.html", "expeditions.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
   "voyage/entry.js", "voyage/voyage.css", "voyage/main.mjs", "voyage/audio.mjs", "voyage/progression.mjs",
+  "voyage/campaign.mjs", "voyage/waystones.mjs", "voyage/grove.mjs", "voyage/summit.mjs",
   "voyage/world.mjs", "voyage/player.mjs", "voyage/mission.mjs", "voyage/vendor/three.module.min.js", "voyage/vendor/three.core.min.js", "voyage/vendor/LICENSE-three.txt",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "island-quests.js", "quests.css",

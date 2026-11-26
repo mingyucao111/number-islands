@@ -2,13 +2,15 @@
 
 [Play The Last Light](https://mingyucao111.github.io/number-islands/) · [Island Atlas](https://mingyucao111.github.io/number-islands/expeditions.html) · [Teacher Workshop](https://mingyucao111.github.io/number-islands/workshop.html)
 
-A third-person 3D island adventure set on the coast of Alderreach. Control an explorer, meet the lighthouse keeper, carry counterweights to the winch and take the recovered lens up to the beacon. Completing the voyage unlocks gliding. Play in a browser with WebGL 2.
+A third-person 3D adventure. Land at Alderreach, awaken the Hollow Tree in Windwood, ride the wind to Highwatch, and carry the light home. The game opens directly inside the world in a browser with WebGL 2.
 
 ## The Last Light
 
 - **Desktop.** Use WASD or the arrow keys to move, Shift to run, drag to look, E to interact, and Space to jump. Hold Space during the descent after unlocking gliding.
 - **Touchscreen.** Use the left stick to move, drag the scene to look and use the two right-hand buttons to jump or interact.
-- **Progression.** Start at any of the six bands from K1–K2 to Secondary 2–3. Each is a different version of the winch challenge on the same coast. Milestones earn XP once per route, advance the player’s rank and persist in the current browser. The pier is the start point for each voyage.
+- **Progression.** Follow the landing trail to begin at K1–K2, or walk to a marked stone beside the pier and interact to choose a band through Secondary 2–3. Clear the coast for gliding, the Hollow Tree for wind lift, then bring the sunstone to Highwatch's beacon for the story ending. The next area opens through a physical arch. Completed chapters record a checkpoint in the current browser, and first clears earn experience once per route. Return to Alderreach after the ending and ring the voyage bell to play the route again.
+
+If you restored the lighthouse in the original single-chapter release, the new campaign carries forward the XP and opens Windwood on that route.
 
 The 3D renderer is the MIT-licensed Three.js r183. The scene, character and tasks were built for Number Islands. [Three.js license](voyage/vendor/LICENSE-three.txt)
 

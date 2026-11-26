@@ -3,9 +3,14 @@ import { buildWorld } from "./world.mjs";
 import { createPlayer } from "./player.mjs";
 import { createQuest } from "./mission.mjs";
 import { createSoundscape } from "./audio.mjs";
-import { ROUTES, earnMilestone, nextRoute, rankFor, restoreProgress, totalExperience } from "./progression.mjs";
+import { ROUTES, rankFor } from "./progression.mjs";
+import { CHAPTERS, campaignXP, chooseTrack, currentTrack, finishChapter, openCampaign, replayTrack, returnHome, travelSkills } from "./campaign.mjs";
+import { createGrove } from "./grove.mjs";
+import { createSummit } from "./summit.mjs";
+import { buildPassage, buildWaystones } from "./waystones.mjs";
 
-const SAVE = "number-islands-last-light-v1";
+const SAVE = "number-islands-campaign-v1";
+const LEGACY_SAVE = "number-islands-last-light-v1";
 const spawn = { x: 0, z: 24, yaw: 0 };
 const get = (id) => document.getElementById(id);
 
@@ -63,57 +68,109 @@ function lightScene(scene, mobile) {
   scene.add(skyLight, direct, direct.target);
 }
 
+const coastExit = Object.freeze({ x: 10, y: 0, z: -23 });
+const replayBell = Object.freeze({ x: 3.4, y: 0, z: 20.1 });
+
+function closeTo(position, point, radius) {
+  return point && Math.abs(position.y - point.y) < 1.45
+    && Math.hypot(position.x - point.x, position.z - point.z) <= radius;
+}
+
+function readSaved(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+
+function createCoast(root, route, home) {
+  const world = buildWorld(root);
+  const quest = createQuest({ scene: root, world, profile: route });
+  const stones = buildWaystones(root, ROUTES, world);
+  const ferry = buildPassage(root, coastExit, "Windwood crossing");
+  const bell = home ? buildPassage(root, replayBell, "Voyage bell") : null;
+  if (home) quest.restoreComplete();
+  ferry.visible = false;
+  return {
+    spawn, exit: home ? null : coastExit, stones, state: quest.state, home,
+    heightAt: world.heightAt,
+    canWalk: (x, z) => world.canWalk(x, z) && quest.canPass(x, z),
+    getPrompt: quest.getPrompt,
+    interact: quest.interact,
+    goalForCompass: quest.goalForCompass,
+    update(dt, time) {
+      world.update(dt, time);
+      quest.update(dt, time);
+      ferry.visible = quest.state.complete && !home;
+      ferry.update(time);
+      bell?.update(time);
+      stones.forEach((stone) => stone.update(time, stone.id === route.id));
+    },
+  };
+}
+
+function disposeRegion(group) {
+  if (!group) return;
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  group.traverse((object) => {
+    if (object.geometry) geometries.add(object.geometry);
+    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+      if (!material) continue;
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
+  });
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
+  for (const texture of textures) texture.dispose();
+}
+
 export function startVoyage() {
   const canvas = get("world");
-  const mobile = matchMedia("(pointer: coarse)").matches;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.35 : 1.65));
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.35 : 1.65));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = .99;
-
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xacccb6);
   scene.fog = new THREE.FogExp2(0xc5d8b9, .012);
-  const world = buildWorld(scene);
   const sky = addSky(scene);
-  lightScene(scene, mobile);
+  lightScene(scene, coarse);
   const camera = new THREE.PerspectiveCamera(57, 1, .09, 175);
-  const quest = createQuest({ scene, world, profile: ROUTES[0] });
-  const terrain = {
-    heightAt: world.heightAt,
-    canWalk(x, z) { return world.canWalk(x, z) && quest.canPass(x, z); },
-  };
-  const player = createPlayer({ scene, camera, canvas, world: terrain, spawn });
   const sound = createSoundscape();
-  const projection = new THREE.Vector3();
-  const viewDirection = new THREE.Vector3();
-  const cameraToMarker = new THREE.Vector3();
-  const cursor = get("interaction");
-  const journal = get("objective");
-  const routeSelect = get("route-select");
-  const title = get("title-screen");
-  const overlay = get("pause-screen");
-  const finale = get("ending-screen");
+  const projected = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const offset = new THREE.Vector3();
   const hud = get("hud");
-  const begin = get("begin");
-  let progress;
-  try { progress = restoreProgress(JSON.parse(localStorage.getItem(SAVE))); }
-  catch { progress = restoreProgress(null); }
-  let active = ROUTES.find(({ id }) => id === progress.chosen) ?? ROUTES[0];
-  let phase = "title";
-  let priorStage = "";
+  const cursor = get("interaction");
+  let campaign = openCampaign(readSaved(SAVE), readSaved(LEGACY_SAVE));
+  let route = currentRoute();
+  let group;
+  let region;
+  let index;
+  let player;
+  let paused = false;
   let noticeUntil = 0;
-  let lastNotice = "";
-  let earned = 0;
+  let notice = "";
+  let bannerUntil = 0;
   let lastTime = performance.now();
   let lastHud = 0;
   let reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function persist() {
-    try { localStorage.setItem(SAVE, JSON.stringify(progress)); } catch { /* memory-only if local storage is blocked */ }
+  const terrain = {
+    heightAt(x, z) { return region.heightAt(x, z); },
+    canWalk(x, z) { return region.canWalk(x, z); },
+    canGlide(x, z, y) { return region.canGlide?.(x, z, y) ?? false; },
+    windAt(x, z, y) { return region.windAt?.(x, z, y) ?? 0; },
+  };
+
+  function currentRoute() { return ROUTES.find(({ id }) => id === campaign.chosen) ?? ROUTES[0]; }
+
+  function save() {
+    try { localStorage.setItem(SAVE, JSON.stringify(campaign)); } catch { /* play without a persistent checkpoint */ }
   }
 
   function resize() {
@@ -125,212 +182,238 @@ export function startVoyage() {
     camera.updateProjectionMatrix();
   }
 
-  function refreshRanks() {
-    const xp = totalExperience(progress);
+  function announce(text, duration = 3900) {
+    notice = text;
+    noticeUntil = performance.now() + duration;
+  }
+
+  function showBanner(eyebrow, title, line, duration = 2200) {
+    const banner = get("chapter-banner");
+    banner.querySelector("p").textContent = eyebrow;
+    banner.querySelector("h1").textContent = title;
+    banner.querySelector("span").textContent = line;
+    banner.hidden = false;
+    bannerUntil = performance.now() + duration;
+  }
+
+  function refreshGrowth() {
+    const xp = campaignXP(campaign);
+    const skills = travelSkills(campaign);
+    player?.setWindGlide(skills.glide);
+    player?.setWindLift(skills.lift);
     get("rank-name").textContent = rankFor(xp).name;
     get("rank-xp").textContent = `${xp} XP`;
+    get("skills").textContent = [skills.glide && "Glide", skills.lift && "Ride the wind"].filter(Boolean).join(" · ");
   }
 
-  function routeSummary() {
-    const route = ROUTES.find(({ id }) => id === routeSelect.value) ?? ROUTES[0];
-    const completed = (progress.steps[route.id] ?? []).includes("complete");
-    const experience = totalExperience(progress);
-    get("route-details").textContent = `${completed ? "Voyage completed" : route.name} · ${rankFor(experience).name} · ${experience} XP`;
-  }
+  function loadRegion(chapterIndex, { home = false, complete = false } = {}) {
+    player?.setCarried(null);
+    if (group) {
+      scene.remove(group);
+      disposeRegion(group);
+    }
+    route = currentRoute();
+    index = chapterIndex;
+    group = new THREE.Group();
+    scene.add(group);
+    if (index === 0) region = createCoast(group, route, home);
+    else if (index === 1) region = createGrove(group, { route });
+    else region = createSummit(group, { route });
+    if (complete) region.restoreComplete?.();
 
-  function loadRoutes() {
-    routeSelect.replaceChildren(...ROUTES.map((route) => {
-      const option = document.createElement("option");
-      option.value = route.id;
-      option.textContent = `${route.grade}  ·  ${route.name}${(progress.steps[route.id] ?? []).includes("complete") ? "  ✓" : ""}`;
-      return option;
-    }));
-    routeSelect.value = active.id;
-    routeSummary();
-  }
-
-  function setPhase(next) {
-    phase = next;
-    title.hidden = next !== "title";
-    overlay.hidden = next !== "paused";
-    finale.hidden = next !== "ending";
-    hud.hidden = next !== "active";
-    canvas.dataset.phase = next;
-    if (next === "active") canvas.focus({ preventScroll: true });
-  }
-
-  function start(route) {
-    active = route;
-    progress.chosen = route.id;
-    persist();
-    quest.setProfile(route, player);
-    player.reset();
-    player.setWindGlide(totalExperience(progress) >= 100);
+    const arrival = complete ? (region.completedSpawn ?? { x: 0, z: -9, yaw: 0 }) : region.spawn;
+    if (!player) player = createPlayer({ scene, camera, canvas, world: terrain, spawn: arrival });
+    else player.reset(arrival);
+    refreshGrowth();
+    canvas.dataset.region = CHAPTERS[index].id;
+    canvas.dataset.route = route.id;
+    canvas.dataset.phase = "active";
+    get("region-name").textContent = CHAPTERS[index].title;
     get("hud-route").textContent = `${route.name} · ${route.grade}`;
-    earned = 0;
-    priorStage = "";
+    hud.hidden = false;
+    cursor.hidden = true;
+    notice = "";
     noticeUntil = 0;
-    lastNotice = "";
-    setPhase("active");
-    void sound.start();
-    refreshRanks();
-    noteStage(performance.now());
+    canvas.focus({ preventScroll: true });
+    showBanner(home ? "Homecoming" : "The Last Light", CHAPTERS[index].title,
+      home ? "The ships are safe. Another voyage waits by the pier." : route.name);
+    if (index === 0 && !home) announce("Route stones are left of the landing trail. Keeper Nessa waits up ahead.", 5200);
     refreshHud(performance.now());
   }
 
-  function showTitle() {
-    quest.reset(player);
-    player.reset();
-    loadRoutes();
-    setPhase("title");
-    begin.focus({ preventScroll: true });
+  function resumeTrack() {
+    const checkpoint = currentTrack(campaign).checkpoint;
+    if (campaign.home) loadRegion(0, { home: true });
+    else if (checkpoint >= CHAPTERS.length) loadRegion(2, { complete: true });
+    else loadRegion(checkpoint);
   }
 
-  function complete() {
-    const next = nextRoute(active.id);
-    get("next-route").hidden = !next;
-    get("next-route").textContent = next ? `Next route · ${next.grade}` : "Next route";
-    get("ending-progress").textContent = `${earned ? "+" + earned + " XP · " : ""}Wind gliding unlocked. Jump and hold to ride the air.`;
-    player.setWindGlide(true);
+  function passageAction(position) {
+    if (!region.state.complete || !closeTo(position, region.exit, 1.65)) return null;
+    return { type: "exit", label: ["Cross to Windwood", "Climb to Highwatch", "Return to Alderreach"][index], loc: region.exit };
+  }
+
+  function pierAction(position) {
+    if (index !== 0 || region.state.carried) return null;
+    if (region.home && closeTo(position, replayBell, 1.55)) {
+      return { type: "replay", label: "Ring the voyage bell", loc: replayBell };
+    }
+    const stone = region.stones.find(({ point }) => closeTo(position, point, 1.15));
+    if (!stone) return null;
+    return { type: "route", id: stone.id, label: `Set sail at ${stone.label}`, loc: stone.point };
+  }
+
+  function interactionAt() {
+    const position = player.position;
+    return passageAction(position) ?? pierAction(position) ?? region.getPrompt(position);
+  }
+
+  function onChapterComplete() {
+    const result = finishChapter(campaign, CHAPTERS[index].id);
+    campaign = result.campaign;
+    save();
+    refreshGrowth();
     sound.play("complete");
-    setPhase("ending");
-    get("explore").focus({ preventScroll: true });
-  }
-
-  function noteStage(now) {
-    const state = quest.state;
-    if (priorStage === state.stage) return;
-    priorStage = state.stage;
-    canvas.dataset.stage = priorStage;
-    const gain = earnMilestone(progress, active.id, priorStage);
-    if (gain.earned) {
-      progress = gain.progress;
-      earned += gain.earned;
-      persist();
-      refreshRanks();
-      if (priorStage !== "complete") sound.play("advance");
-    }
-    if (priorStage === "complete") {
-      noticeUntil = now + 2800;
-      complete();
-    }
+    const award = result.gained ? `+${result.gained} XP · ` : "";
+    if (index === 0) announce(award + "Glide unlocked. Hold jump while falling to ride the breeze.", 5800);
+    else if (index === 1) announce(award + "Wind lift unlocked. Hold jump in a current to rise.", 5800);
+    else showBanner("Journey complete", "The lights return", award + "Beacon Guardian • The ships are home.", 5700);
   }
 
   function interact() {
-    if (phase !== "active" || !quest.interact(player.position, player)) return;
-    sound.play();
-    const now = performance.now();
-    noticeUntil = now + 3700;
-    noteStage(now);
-    refreshHud(now);
+    const action = interactionAt();
+    if (!action) return;
+    if (action.type === "exit") {
+      if (index >= CHAPTERS.length - 1) {
+        campaign = returnHome(campaign);
+        save();
+        loadRegion(0, { home: true });
+      } else loadRegion(index + 1);
+      sound.play("advance");
+      return;
+    }
+    if (action.type === "replay") {
+      campaign = replayTrack(campaign);
+      save();
+      resumeTrack();
+      sound.play("advance");
+      return;
+    }
+    if (action.type === "route") {
+      const next = chooseTrack(campaign, action.id);
+      if (next !== campaign) {
+        campaign = next;
+        save();
+        resumeTrack();
+      } else announce(`${route.grade} is your current route.`);
+      sound.play("advance");
+      return;
+    }
+    const wasComplete = region.state.complete;
+    if (region.interact(player.position, player)) {
+      if (!wasComplete && region.state.complete) onChapterComplete();
+      else {
+        sound.play("use");
+        if (region.state.notice) announce(region.state.notice);
+      }
+      refreshHud(performance.now());
+    }
   }
 
-  function markerInFront(loc, verticalOffset) {
-    projection.set(loc.x, (loc.y ?? 0) + verticalOffset, loc.z);
-    camera.getWorldDirection(viewDirection);
-    cameraToMarker.copy(projection).sub(camera.position);
-    if (cameraToMarker.dot(viewDirection) <= 0) return false;
-    projection.project(camera);
-    return Math.abs(projection.x) < .86 && Math.abs(projection.y) < .86;
+  function describeGoal() {
+    if (region.home) return "The light has returned. Explore the coast or ring the voyage bell to begin again.";
+    if (!region.state.complete) return region.state.objective;
+    return ["Follow the shore to the Windwood crossing.", "Take the forest path to Highwatch.",
+      "The ships are home. Return through the arch, or explore the summit."][index];
+  }
+
+  function setText(element, text) {
+    if (element.textContent !== text) element.textContent = text;
   }
 
   function refreshHud(now) {
-    if (phase !== "active") return;
-    const state = quest.state;
-    if (journal.textContent !== state.objective) journal.textContent = state.objective;
+    const { state } = region;
+    const position = player.position;
+    setText(get("objective"), describeGoal());
     const load = get("quest-load");
-    load.hidden = state.stage !== "weights";
+    load.hidden = index !== 0 || state.stage !== "weights";
     if (!load.hidden) {
-      get("counterweight").textContent = `Winch ${state.load} / ${state.target}`;
+      setText(get("counterweight"), `Winch ${state.load} / ${state.target}`);
       get("load-meter").style.setProperty("--meter", `${100 * Math.min(1, state.load / state.target)}%`);
     }
-    const carry = get("carry-status");
-    carry.hidden = !state.carried;
-    if (!carry.hidden) carry.textContent = state.carried === "lens" ? "Carrying the lighthouse lens" : `Carrying a ${state.carriedMarks}-mark weight`;
-    const notice = get("notice");
-    if (state.notice !== lastNotice) {
-      lastNotice = state.notice;
-      notice.textContent = lastNotice;
-    }
-    notice.hidden = !state.notice || now > noticeUntil;
+    const cargo = get("carry-status");
+    cargo.hidden = !state.carried;
+    if (!cargo.hidden) setText(cargo, state.carriedLabel || (state.carried === "lens" ? "Carrying the lens" : `Carrying a ${state.carriedMarks}-mark weight`));
+    const status = get("notice");
+    status.hidden = !notice || now > noticeUntil;
+    if (!status.hidden) setText(status, notice);
+    const banner = get("chapter-banner");
+    if (!banner.hidden && now > bannerUntil) banner.hidden = true;
 
-    const pos = player.position;
-    const goal = quest.goalForCompass(pos);
-    const compass = get("quest-compass");
-    compass.hidden = !goal;
+    const goal = (state.complete && region.exit) || region.goalForCompass(position);
+    get("quest-compass").hidden = !goal;
     if (goal) {
-      camera.getWorldDirection(viewDirection);
-      const heading = Math.atan2(goal.x - pos.x, -(goal.z - pos.z)) - Math.atan2(viewDirection.x, -viewDirection.z);
-      get("bearing").style.setProperty("--bearing", `${heading}rad`);
-      get("distance").textContent = `${Math.round(Math.hypot(goal.x - pos.x, (goal.y ?? 0) - pos.y, goal.z - pos.z))} m`;
+      camera.getWorldDirection(direction);
+      const angle = Math.atan2(goal.x - position.x, position.z - goal.z) - Math.atan2(direction.x, -direction.z);
+      get("bearing").style.setProperty("--bearing", `${angle}rad`);
+      setText(get("distance"), `${Math.round(Math.hypot(goal.x - position.x, (goal.y ?? 0) - position.y, goal.z - position.z))} m`);
     }
-    const prompt = quest.getPrompt(pos);
+
+    const prompt = interactionAt();
     cursor.hidden = !prompt;
     if (prompt) {
-      cursor.querySelector("span").textContent = prompt.label;
-      if (markerInFront(prompt.loc, 1.55)) {
-        cursor.style.left = `${50 + projection.x * 50}%`;
-        cursor.style.top = `${50 - projection.y * 50}%`;
+      setText(cursor.querySelector("span"), prompt.label);
+      projected.set(prompt.loc.x, prompt.loc.y + 1.48, prompt.loc.z);
+      camera.getWorldDirection(direction);
+      const inFront = offset.copy(projected).sub(camera.position).dot(direction) > 0;
+      projected.project(camera);
+      if (inFront && Math.abs(projected.x) < .86 && Math.abs(projected.y) < .86) {
+        cursor.style.left = `${50 + projected.x * 50}%`;
+        cursor.style.top = `${50 - projected.y * 50}%`;
       } else {
         cursor.style.left = "50%";
-        cursor.style.top = mobile ? "63%" : "72%";
+        cursor.style.top = coarse ? "63%" : "72%";
       }
     }
-    canvas.dataset.position = [pos.x, pos.y, pos.z].map((value) => value.toFixed(2)).join(",");
-    canvas.dataset.drawCalls = String(renderer.info.render.calls);
+    canvas.dataset.stage = state.stage;
+    canvas.dataset.position = [position.x, position.y, position.z].map((value) => value.toFixed(2)).join(",");
   }
 
   function draw(now) {
     const dt = Math.min(.047, (now - lastTime) / 1000);
     lastTime = now;
-    if (phase === "active") {
+    if (!paused) {
       player.update(dt);
       if (player.takeInteract()) interact();
-      if (now - lastHud >= 85) {
-        lastHud = now;
-        refreshHud(now);
-      }
+      if (player.takeRecovery()) announce("The wind carried you back to safe ground.");
     }
-    const time = reduceMotion ? 12.0 : now * .001;
-    world.update(dt, time);
-    quest.update(dt, time);
+    const time = reduceMotion ? 12 : now * .001;
+    region.update(dt, time);
+    if (now - lastHud >= 85) {
+      lastHud = now;
+      refreshHud(now);
+    }
     sky.position.copy(camera.position);
     renderer.render(scene, camera);
     requestAnimationFrame(draw);
   }
 
-  routeSelect.addEventListener("change", routeSummary);
-  begin.addEventListener("click", () => start(ROUTES.find(({ id }) => id === routeSelect.value) ?? ROUTES[0]));
-  cursor.addEventListener("click", interact);
-  get("pause").addEventListener("click", () => { setPhase("paused"); get("continue").focus(); });
-  get("continue").addEventListener("click", () => setPhase("active"));
-  get("restart").addEventListener("click", () => start(active));
-  get("return-title").addEventListener("click", showTitle);
-  get("end-title").addEventListener("click", showTitle);
-  get("explore").addEventListener("click", () => setPhase("active"));
-  get("next-route").addEventListener("click", () => {
-    const next = nextRoute(active.id);
-    if (next) start(next);
-  });
-  get("toggle-audio").addEventListener("click", (event) => {
-    const muted = sound.toggle();
-    event.currentTarget.setAttribute("aria-pressed", String(muted));
-    event.currentTarget.setAttribute("aria-label", muted ? "Unmute ambient audio" : "Mute ambient audio");
-    event.currentTarget.textContent = muted ? "Muted" : "Sound";
-  });
   window.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || get("controls").open) return;
-    if (phase === "active") { setPhase("paused"); get("continue").focus(); }
-    else if (phase === "paused") setPhase("active");
+    if (event.code === "Escape") {
+      paused = !paused;
+      player.setEnabled(!paused);
+      get("paused").hidden = !paused;
+    }
+    if (event.code === "KeyM" && !event.repeat) announce(sound.toggle() ? "Sound muted" : "Sound on");
   });
+  window.addEventListener("keydown", () => void sound.start(), { once: true });
+  window.addEventListener("pointerdown", () => void sound.start(), { once: true });
   window.addEventListener("resize", resize, { passive: true });
   matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", (event) => { reduceMotion = event.matches; });
-
-  loadRoutes();
   resize();
+  resumeTrack();
+  save();
   renderer.render(scene, camera);
-  begin.textContent = "Begin the voyage  →";
-  begin.disabled = false;
-  canvas.dataset.phase = phase;
+  get("load-message").hidden = true;
   requestAnimationFrame(draw);
 }
