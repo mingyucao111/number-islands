@@ -349,7 +349,7 @@ export function startVoyage() {
     duel = createArenaDuel(arenaGroup, { route: route.id, hero, progress: heroProgress(growth, hero), connection,
       player: () => player, sound, onExit: leaveDuel, onRankedAction(again) {
         leaveDuel();
-        openRanked(again);
+        openRanked(again, connection.mode);
       }, async onComplete(outcome, mode) {
         const { state, reward } = await updateHeroGrowth((current) => awardDuel(current, { matchId, hero, mode, outcome }));
         return { reward, progress: heroProgress(state, hero) };
@@ -388,9 +388,9 @@ export function startVoyage() {
     lobby.open(prefill);
   }
 
-  function openRanked(again = false) {
+  function openRanked(again = false, mode) {
     player.setEnabled(false);
-    rankedLobby.open(route, selectedHero, again);
+    rankedLobby.open(route, selectedHero, again, mode);
   }
 
   function consumeInvite() {

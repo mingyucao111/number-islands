@@ -271,10 +271,10 @@ function makeLandscape(host) {
   return sheet;
 }
 
-function makeRival(host, hero) {
+function makeFighter(host, hero, name, role) {
   const group = new THREE.Group();
   const rig = new THREE.Group();
-  group.name = "Rival guardian";
+  group.name = name;
   group.add(rig);
   host.add(group);
   const cloth = {
@@ -328,16 +328,43 @@ function makeRival(host, hero) {
   const halo = add(group, new THREE.RingGeometry(0.47, 0.502, 27).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false, transparent: true, opacity: 0.64 }), [0, 0.027, 0]);
 
+  const roleTint = role === "ally" ? 0x81ebc0 : 0xffa07c;
+  let beacon;
+  let selection;
+  if (role) {
+    halo.material.color.setHex(roleTint);
+    halo.material.opacity = 0.92;
+    halo.scale.setScalar(1.22);
+    beacon = add(group, role === "ally" ? new THREE.OctahedronGeometry(0.152)
+      : new THREE.ConeGeometry(0.136, 0.24, 5).rotateZ(Math.PI),
+    new THREE.MeshBasicMaterial({ color: roleTint }), [0, 2.09, 0]);
+    beacon.name = role === "ally" ? "Ally beacon" : "Opponent beacon";
+    if (role === "opponent") {
+      selection = new THREE.Group();
+      selection.name = "Selected target";
+      selection.visible = false;
+      group.add(selection);
+      const gold = new THREE.MeshBasicMaterial({ color: 0xffdb75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+      add(selection, new THREE.RingGeometry(0.777, 0.842, 32).rotateX(-Math.PI / 2), gold, [0, 0.046, 0]);
+      const bracket = new THREE.BoxGeometry(0.12, 0.016, 0.19);
+      for (let corner = 0; corner < 4; corner++) {
+        const angle = corner * Math.PI / 2;
+        const tab = add(selection, bracket, gold, [Math.sin(angle) * 0.82, 0.049, Math.cos(angle) * 0.82]);
+        tab.rotation.y = angle;
+      }
+    }
+  }
+
   let equipped;
   function dress(id) {
     const heroId = typeof id === "string" && Object.hasOwn(TEAM, id) ? id : "warden";
     if (heroId === equipped) return;
     equipped = heroId;
     for (const [key, part] of Object.entries(cloth)) part.color.setHex(TEAM[equipped][key]);
-    halo.material.color.setHex(TEAM[equipped].light);
+    if (!role) halo.material.color.setHex(TEAM[equipped].light);
   }
   dress(hero);
-  return { group, rig, legs, arms, cape, dress };
+  return { group, rig, legs, arms, cape, dress, halo, beacon, selection };
 }
 
 function transparentInk(color, opacity = 1) {
@@ -578,15 +605,21 @@ function legalPosition(position) {
   return { x: position.x * scale, z: position.z * scale };
 }
 
-function sidePoint(side) {
+function sidePoint(side, teamMode) {
+  if (teamMode) {
+    const north = side >= 2;
+    return { x: side === 0 || side === 3 ? -2.3 : 2.3, z: north ? -5 : 5, yaw: north ? Math.PI : 0 };
+  }
   return { x: 0, z: side === 1 ? -5 : 5, yaw: side === 1 ? Math.PI : 0 };
 }
 
-export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMotion = false } = {}) {
+export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMotion = false, teamMode = false, roster = [] } = {}) {
   if (!root?.isObject3D) throw new TypeError("The duel arena requires a Three.js scene.");
-  const homeSide = side === 1 ? 1 : 0;
-  const spawn = sidePoint(homeSide);
-  const away = sidePoint(1 - homeSide);
+  const sides = teamMode ? [0, 1, 2, 3] : [0, 1];
+  const homeSide = sides.includes(side) ? side : 0;
+  const spawn = sidePoint(homeSide, teamMode);
+  const homeTeam = Math.floor(homeSide / 2);
+  const primaryRival = teamMode ? (homeTeam ? 0 : 2) : 1 - homeSide;
   const group = new THREE.Group();
   group.name = "Windstone Arena";
   root.add(group);
@@ -595,17 +628,22 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
   makeCourt(group, random);
   makeRim(group, random);
   const flutter = makeWindgates(group);
-  const rival = makeRival(group, rivalHero);
-  rival.group.position.set(away.x, 0, away.z);
-  rival.group.rotation.y = away.yaw;
+  const fighters = new Map();
+  for (const remoteSide of sides) {
+    if (remoteSide === homeSide) continue;
+    const point = sidePoint(remoteSide, teamMode);
+    const hero = (Array.isArray(roster) ? roster.find((entry) => entry?.side === remoteSide)?.hero : undefined) ?? rivalHero;
+    const role = teamMode ? (Math.floor(remoteSide / 2) === homeTeam ? "ally" : "opponent") : null;
+    const fighter = makeFighter(group, hero, teamMode ? "Arena fighter " + remoteSide : "Rival guardian", role);
+    fighter.group.position.set(point.x, 0, point.z);
+    fighter.group.rotation.y = point.yaw;
+    fighters.set(remoteSide, {
+      ...fighter, target: point, requestedYaw: null, stride: 0, gesture: "", gestureAge: 1,
+      cast: null, down: false, targeted: false,
+    });
+  }
   const vfx = makeEffects(group);
   const attacks = makeAttacks(group);
-  let target = away;
-  let requestedYaw = null;
-  let stride = 0;
-  let gesture = "";
-  let gestureAge = 1;
-  let cast = null;
   let reduced = Boolean(reduceMotion);
 
   function setReducedMotion(value) {
@@ -615,77 +653,90 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
   }
   setReducedMotion(reduced);
 
-  function setRival(update) {
-    const destination = legalPosition(update);
-    if (destination) target = destination;
-    if (update?.hero !== undefined) rival.dress(update.hero);
-    requestedYaw = Number.isFinite(update?.yaw) ? update.yaw : null;
-    if (typeof update?.move === "string" && Object.hasOwn(LIFE, update.move)) {
-      gesture = update.move;
-      gestureAge = 0;
+  function setFighter(remoteSide, snapshot) {
+    const fighter = fighters.get(remoteSide);
+    if (!fighter || !snapshot) return;
+    const destination = legalPosition(snapshot);
+    if (destination) fighter.target = destination;
+    if (snapshot.hero !== undefined) fighter.dress(snapshot.hero);
+    fighter.requestedYaw = Number.isFinite(snapshot.yaw) ? snapshot.yaw : null;
+    if (typeof snapshot.down === "boolean") fighter.down = snapshot.down;
+    if (typeof snapshot.targeted === "boolean") fighter.targeted = snapshot.targeted;
+    if (fighter.down) fighter.cast = null;
+    if (typeof snapshot.move === "string" && Object.hasOwn(LIFE, snapshot.move)) {
+      fighter.gesture = snapshot.move;
+      fighter.gestureAge = 0;
     }
+    if (fighter.selection) fighter.selection.visible = fighter.targeted && !fighter.down;
+    if (fighter.beacon) fighter.beacon.visible = !fighter.down;
+    fighter.halo.visible = !fighter.down;
   }
 
   function pulse({ kind, side: actor = homeSide, hero, target: destination, origin, radius } = {}) {
     if (typeof kind !== "string" || !Object.hasOwn(LIFE, kind)) return;
-    const friends = actor === homeSide;
-    const position = legalPosition(origin) ?? (friends ? spawn : { x: rival.group.position.x, z: rival.group.position.z });
+    const fighter = fighters.get(actor);
+    const position = legalPosition(origin) ?? fighter?.group.position ?? spawn;
     const end = legalPosition(destination) ?? position;
     const light = (typeof hero === "string" && Object.hasOwn(TEAM, hero) ? TEAM[hero] : TEAM.gale).light;
     const tint = kind === "heal" ? 0xcce89c : kind === "burn" ? 0xff9b6a
       : kind === "dodge" ? 0xd3fff5 : kind === "cleanse" ? 0xf1e2a4 : light;
     vfx.trigger(kind, tint, position, end, radius);
-    if (!friends) {
-      gesture = kind;
-      gestureAge = 0;
+    if (fighter) {
+      fighter.gesture = kind;
+      fighter.gestureAge = 0;
     }
   }
 
-  function playCast(style, aim) {
-    if (!STYLES.has(style)) return;
+  function playCast(style, aim, remoteSide = primaryRival) {
+    const fighter = fighters.get(remoteSide);
+    if (!fighter || fighter.down || !STYLES.has(style)) return;
     const target = legalPosition(aim);
-    if (!target) return;
-    cast = { style, target, age: 0 };
+    if (target) fighter.cast = { style, target, age: 0 };
   }
 
-  function update(dt, time) {
-    const step = THREE.MathUtils.clamp(dt, 0, 0.1);
-    water.uniforms.now.value = time;
-    const place = rival.group.position;
+  function stepFighter(fighter, step, time) {
+    const { group: guardian, rig, arms, legs, cape, target, requestedYaw, gesture, down } = fighter;
+    const place = guardian.position;
     const dx = target.x - place.x;
     const dz = target.z - place.z;
     const gap = Math.hypot(dx, dz);
     const easing = 1 - Math.exp(-step * 15);
     place.x += dx * easing;
     place.z += dz * easing;
-    if (cast) {
-      cast.age += step;
-      if (cast.age >= CAST_TIMES[cast.style]) cast = null;
-    }
+    if (fighter.cast && (fighter.cast.age += step) >= CAST_TIMES[fighter.cast.style]) fighter.cast = null;
+    const { cast } = fighter;
     const castWeight = cast ? Math.sin(Math.PI * cast.age / CAST_TIMES[cast.style]) * (reduced ? 0.72 : 1) : 0;
     const castYaw = cast && Math.hypot(place.x - cast.target.x, place.z - cast.target.z) > 0.04
       ? Math.atan2(place.x - cast.target.x, place.z - cast.target.z) : null;
     const look = castYaw ?? requestedYaw ?? (gap > 0.045 ? Math.atan2(-dx, -dz) : Math.atan2(place.x, place.z));
-    if (Math.abs(place.x) + Math.abs(place.z) > 0.01 || requestedYaw !== null) {
-      const turn = look - rival.group.rotation.y;
-      rival.group.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * easing;
+    if (!down && (Math.abs(place.x) + Math.abs(place.z) > 0.01 || requestedYaw !== null)) {
+      const turn = look - guardian.rotation.y;
+      guardian.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * easing;
     }
-    const moving = Math.min(1, gap * 2);
-    stride += step * (5 + moving * 6) * moving;
-    gestureAge += step;
-    const effort = gesture && gestureAge < LIFE[gesture] ? Math.sin(Math.PI * gestureAge / LIFE[gesture]) : 0;
-    rival.rig.position.y = moving * (1 - Math.cos(stride * 2)) * 0.039;
-    rival.rig.rotation.x = (gesture === "dash" ? effort * 0.23 : moving * 0.066) + castWeight * 0.10;
-    rival.cape.rotation.x = -0.25 - moving * 0.12 - effort * 0.085 + (reduced ? 0 : Math.sin(time * 3.8) * 0.034);
+    const moving = down ? 0 : Math.min(1, gap * 2);
+    fighter.stride += step * (5 + moving * 6) * moving;
+    fighter.gestureAge += step;
+    const effort = !down && gesture && fighter.gestureAge < LIFE[gesture]
+      ? Math.sin(Math.PI * fighter.gestureAge / LIFE[gesture]) : 0;
+    rig.rotation.z += ((down ? 1.41 : 0) - rig.rotation.z) * (reduced ? 1 : easing);
+    rig.position.y = down ? 0.22 : moving * (1 - Math.cos(fighter.stride * 2)) * 0.039;
+    rig.rotation.x = (gesture === "dash" ? effort * 0.23 : moving * 0.066) + castWeight * 0.10;
+    cape.rotation.x = -0.25 - moving * 0.12 - effort * 0.085 + (reduced || down ? 0 : Math.sin(time * 3.8) * 0.034);
     for (let i = 0; i < 2; i++) {
       const sign = i * 2 - 1;
-      const wave = Math.sin(stride) * sign * moving;
-      rival.legs[i].rotation.x = wave * 0.53;
-      rival.arms[i].rotation.x = -wave * 0.43 - castWeight * (cast?.style === "bolt" && i === 0 ? 0.28 : 1.06)
+      const wave = Math.sin(fighter.stride) * sign * moving;
+      legs[i].rotation.x = wave * 0.53;
+      arms[i].rotation.x = -wave * 0.43 - castWeight * (cast?.style === "bolt" && i === 0 ? 0.28 : 1.06)
         - (gesture === "strike" && i === 1 ? effort * 1.28 : gesture === "heal" || gesture === "shield" ? effort * 0.53 : 0);
-      rival.arms[i].rotation.z = sign * (0.23 + (gesture === "shield" ? effort * 0.42 : 0)
+      arms[i].rotation.z = sign * (0.23 + (gesture === "shield" ? effort * 0.42 : 0)
         + (cast?.style === "area" ? castWeight * 0.59 : castWeight * 0.11));
     }
+  }
+
+  function update(dt, time) {
+    const step = THREE.MathUtils.clamp(dt, 0, 0.1);
+    water.uniforms.now.value = time;
+    for (const fighter of fighters.values()) stepFighter(fighter, step, time);
     flutter(reduced ? 0 : time);
     attacks.step(step, time);
     vfx.step(step);
@@ -695,7 +746,8 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
     spawn,
     heightAt(x, z) { return Number.isFinite(x) && Number.isFinite(z) ? 0 : NaN; },
     canWalk(x, z) { return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= LIMIT; },
-    setRival,
+    setRival(snapshot) { setFighter(primaryRival, snapshot); },
+    setFighter,
     setAttacks: attacks.sync,
     setReducedMotion,
     playCast,

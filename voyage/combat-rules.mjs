@@ -2,6 +2,10 @@ const HEALTH = 100;
 const MAX_SHIELD = 25;
 const MAX_ATTACKS = 12;
 const EPSILON = 1e-7;
+const TEAM_CAST_RANGE = 13;
+const SUPPORT_RADIUS = 6.5;
+const COMBO_DAMAGE = 4;
+const COMBO_WINDOW = 3;
 const TIERS = Object.freeze([
   { damage: 10, cooldown: 2.5, window: 9, style: "bolt" },
   { damage: 20, cooldown: 5.5, window: 12, style: "wave" },
@@ -151,26 +155,30 @@ function questionsFor(random, route) {
   };
 }
 
-function makeFighter(choice, fallback, side, signature) {
-  const definition = typeof choice === "string" && Object.hasOwn(HEROES, choice) ? HEROES[choice] : HEROES[fallback];
-  const pose = { x: 0, z: side === 0 ? 5 : -5 };
-  return { definition, signature, pose, sampled: pose, hp: HEALTH, shield: 0, evasion: null,
-    readyAt: [0, 0, 0, 0], pending: null, embers: [] };
+export function combatSpawn(side, teamMode = false) {
+  const north = teamMode ? side >= 2 : side === 1;
+  const x = teamMode ? (side === 1 || side === 2 ? 2.3 : -2.3) : 0;
+  return { x, z: north ? -5 : 5, yaw: north ? Math.PI : 0 };
 }
 
-function validSide(side) {
-  return side === 0 || side === 1;
+function makeFighter(choice, fallback, side, signature, duo) {
+  const definition = typeof choice === "string" && Object.hasOwn(HEROES, choice) ? HEROES[choice] : HEROES[fallback];
+  const { x, z } = combatSpawn(side, duo);
+  const pose = { x, z };
+  return { side, team: duo ? Math.floor(side / 2) : side, definition, signature, pose, sampled: pose,
+    hp: HEALTH, shield: 0, evasion: null, recentHit: null,
+    readyAt: [0, 0, 0, 0], pending: null, embers: [] };
 }
 
 function copyPoint({ x, z }) {
   return Object.freeze({ x: Math.round(x * 1000) / 1000, z: Math.round(z * 1000) / 1000 });
 }
 
-function aim(from, to, side) {
+function aim(from, to, team) {
   const x = to.x - from.x;
   const z = to.z - from.z;
   const length = Math.hypot(x, z);
-  return length > EPSILON ? { x: x / length, z: z / length } : { x: 0, z: side === 0 ? -1 : 1 };
+  return length > EPSILON ? { x: x / length, z: z / length } : { x: 0, z: team === 0 ? -1 : 1 };
 }
 
 function describeAttack(shot, time) {
@@ -184,6 +192,7 @@ function describeAttack(shot, time) {
   const round = (number) => Math.round(number * 1000) / 1000;
   return Object.freeze({
     id: shot.id, side: shot.side, slot: shot.slot, hero: shot.hero, style: shot.style, effect: shot.skill.effect,
+    ...(shot.duo && { target: shot.target }),
     ...copyPoint(center), radius: round(radius), directionX: round(shot.direction.x), directionZ: round(shot.direction.z),
     origin: copyPoint(shot.origin), destination: copyPoint(shot.destination), progress: round(progress),
     seconds: round(Math.max(0, shot.endsAt - time)),
@@ -229,13 +238,7 @@ function collisionAlong(shot, targetFrame, from, to, targetMoves) {
   return entries.length ? from + Math.max(0, Math.min(duration, ...entries)) : null;
 }
 
-function awaitImpact(shot, targetFrame, time, end) {
-  if (shot.style === "area") {
-    if (shot.endsAt > end) return null;
-    const target = sample(targetFrame, shot.endsAt);
-    const landed = Math.hypot(target.x - shot.destination.x, target.z - shot.destination.z) <= shot.path.radius + EPSILON;
-    return { shot, at: shot.endsAt, landed };
-  }
+function projectileContact(shot, targetFrame, time, end) {
   const start = Math.max(shot.startsAt, time);
   const finish = Math.min(shot.endsAt, end);
   if (start > finish) return null;
@@ -243,17 +246,15 @@ function awaitImpact(shot, targetFrame, time, end) {
   let touch = null;
   if (start < split) touch = collisionAlong(shot, targetFrame, start, Math.min(split, finish), true);
   if (touch === null && split <= finish) touch = collisionAlong(shot, targetFrame, Math.max(split, start), finish, false);
-  if (touch !== null) return { shot, at: touch, landed: true };
-  return shot.endsAt <= end ? { shot, at: shot.endsAt, landed: false } : null;
+  return touch;
 }
 
 export function createCombat({ heroes = ["gale", "ember"], route = "p12", random = Math.random, signatures = [false, false] } = {}) {
   if (typeof random !== "function") throw new TypeError("Combat expects a random function.");
   const questionFor = questionsFor(random, route);
-  const fighters = [
-    makeFighter(heroes?.[0], "gale", 0, signatures?.[0] === true),
-    makeFighter(heroes?.[1], "ember", 1, signatures?.[1] === true),
-  ];
+  const duo = Array.isArray(heroes) && heroes.length === 4;
+  const defaults = duo ? ["gale", "ember", "gale", "ember"] : ["gale", "ember"];
+  const fighters = defaults.map((fallback, side) => makeFighter(heroes?.[side], fallback, side, signatures?.[side] === true, duo));
   const attacks = [];
   let time = 0;
   let winner = null;
@@ -261,13 +262,30 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
   let attackSequence = 0;
   let events = Object.freeze([]);
 
+  const validSide = (side) => Number.isInteger(side) && side >= 0 && side < fighters.length;
+  const living = (fighter) => fighter.hp > 0;
+  const enemiesOf = (side) => fighters.filter((fighter) => fighter.team !== fighters[side].team && living(fighter));
+
+  function targetFor(side, requested, range = duo ? TEAM_CAST_RANGE : Infinity) {
+    if (!validSide(side) || !living(fighters[side])) return null;
+    const { pose } = fighters[side];
+    let nearest = null;
+    for (const opponent of enemiesOf(side)) {
+      if (requested !== undefined && opponent.side !== requested) continue;
+      const distance = Math.hypot(pose.x - opponent.pose.x, pose.z - opponent.pose.z);
+      if (distance <= range && (nearest === null || distance < nearest.distance)) nearest = { side: opponent.side, distance };
+    }
+    return nearest?.side ?? null;
+  }
+
   function emit(side, kind, details = {}) {
     events = Object.freeze([...events.slice(-31), Object.freeze({ id: ++sequence, side, kind, ...details })]);
   }
 
   function endIfNeeded() {
-    if (fighters[0].hp > 0 && fighters[1].hp > 0) return false;
-    winner = fighters[0].hp === fighters[1].hp ? "draw" : fighters[0].hp > 0 ? 0 : 1;
+    const standing = new Set(fighters.filter(living).map(({ team }) => team));
+    if (standing.size === 2) return false;
+    winner = standing.size === 1 ? standing.values().next().value : "draw";
     for (const fighter of fighters) {
       fighter.pending = null;
       fighter.embers = [];
@@ -279,15 +297,18 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
 
   function setPose(side, point) {
     if (!validSide(side) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.z)
-      || Math.abs(point.x) > 100 || Math.abs(point.z) > 100) return false;
+      || Math.abs(point.x) > 100 || Math.abs(point.z) > 100
+      || (duo && (!living(fighters[side]) || winner !== null))) return false;
     fighters[side].pose = { x: point.x, z: point.z };
     return true;
   }
 
-  function damage(side, amount, effect, slot, geometry = null) {
-    const target = 1 - side;
+  function damage(side, target, amount, effect, slot, geometry = null) {
     const opponent = fighters[target];
-    let impact = amount;
+    const previous = opponent.recentHit;
+    const combo = duo && geometry && previous && previous.side !== side && previous.until >= time
+      && fighters[previous.side].team === fighters[side].team;
+    let impact = amount + (combo ? COMBO_DAMAGE : 0);
     if (geometry && opponent.evasion && opponent.evasion.expires > time) {
       const resisted = Math.floor(impact * opponent.evasion.reduction);
       impact -= resisted;
@@ -301,142 +322,194 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     opponent.hp -= dealt;
     emit(side, geometry ? "hit" : "burn", { target, slot, amount: dealt, absorbed, effect, ...geometry,
       ...(pierced > 0 && { pierced }) });
+    if (duo && geometry && dealt > 0) {
+      opponent.recentHit = { side, until: time + COMBO_WINDOW };
+      if (combo) emit(side, "combo", { target, ally: previous.side, amount: Math.min(COMBO_DAMAGE, dealt), slot,
+        attackId: geometry.attackId });
+    }
     return dealt;
   }
 
-  function heal(side, max, slot) {
-    const fighter = fighters[side];
+  function buffEvent(side, target, slot, kind, amount) {
+    if (amount > 0) emit(side, kind, { amount, slot, effect: kind, ...(duo && { target }) });
+  }
+
+  function heal(side, target, max, slot) {
+    const fighter = fighters[target];
     const amount = Math.min(HEALTH - fighter.hp, max);
     fighter.hp += amount;
-    if (amount > 0) emit(side, "heal", { amount, slot, effect: "heal" });
+    buffEvent(side, target, slot, "heal", amount);
   }
 
-  function shield(side, max, slot) {
-    const fighter = fighters[side];
+  function shield(side, target, max, slot) {
+    const fighter = fighters[target];
     const amount = Math.min(max, MAX_SHIELD - fighter.shield);
     fighter.shield += amount;
-    if (amount > 0) emit(side, "shield", { amount, slot, effect: "shield" });
+    buffEvent(side, target, slot, "shield", amount);
   }
 
-  function cleanse(side, slot) {
-    const fighter = fighters[side];
+  function cleanse(side, target, slot) {
+    const fighter = fighters[target];
     const cleared = fighter.embers.length;
     fighter.embers = [];
-    if (cleared > 0) emit(side, "cleanse", { amount: cleared, slot, effect: "cleanse" });
+    buffEvent(side, target, slot, "cleanse", cleared);
   }
 
-  function dash(side, slot, reduction) {
+  function dash(side, target, slot, reduction) {
     const fighter = fighters[side];
     const existing = fighter.evasion?.expires > time ? fighter.evasion.reduction : 0;
     fighter.evasion = { reduction: Math.max(existing, reduction), expires: time + 4 };
     const origin = copyPoint(fighter.pose);
-    const destination = copyPoint(fighters[1 - side].pose);
-    emit(side, "dash", { slot, effect: "evade", origin, destination });
+    const destination = copyPoint(fighters[target].pose);
+    emit(side, "dash", { slot, effect: "evade", origin, destination, ...(duo && { target }) });
   }
 
-  function hasten(side, slot, power) {
+  function hasten(side, target, slot, power) {
     let amount = 0;
-    for (const [index, readyAt] of fighters[side].readyAt.entries()) {
-      if (index === slot || readyAt <= time) continue;
+    for (const [index, readyAt] of fighters[target].readyAt.entries()) {
+      if ((side === target && index === slot) || readyAt <= time) continue;
       const shortened = Math.max(time, readyAt - power);
       amount += readyAt - shortened;
-      fighters[side].readyAt[index] = shortened;
+      fighters[target].readyAt[index] = shortened;
     }
-    if (amount > 0) emit(side, "haste", { amount, slot, effect: "haste" });
+    buffEvent(side, target, slot, "haste", amount);
   }
 
-  function activate(side, slot, skill) {
+  function activate(side, target, slot, skill) {
     const { effect, power } = skill;
+    const { team, pose } = fighters[side];
+    const ally = duo && fighters.find((fighter) => fighter.side !== side && fighter.team === team && living(fighter)
+      && Math.hypot(fighter.pose.x - pose.x, fighter.pose.z - pose.z) <= SUPPORT_RADIUS);
+    const guard = () => {
+      shield(side, side, power, slot);
+      if (ally) shield(side, ally.side, Math.ceil(power / 2), slot);
+    };
+    const restore = (amount) => {
+      heal(side, side, amount, slot);
+      if (ally) heal(side, ally.side, Math.ceil(amount / 2), slot);
+    };
+    const quicken = () => {
+      hasten(side, side, slot, power);
+      if (ally) hasten(side, ally.side, slot, power / 2);
+    };
     switch (effect) {
       case "shield":
-        shield(side, power, slot);
+        guard();
         break;
       case "cleanse-shield":
       case "shield-cleanse":
-        cleanse(side, slot);
-        shield(side, power, slot);
+        cleanse(side, side, slot);
+        if (ally) cleanse(side, ally.side, slot);
+        guard();
         break;
       case "shield-heal":
-        shield(side, power, slot);
-        heal(side, 6, slot);
+        guard();
+        restore(6);
         break;
       case "evade":
-        dash(side, slot, power);
+        dash(side, target, slot, power);
         break;
       case "dash-haste":
-        dash(side, slot, .36);
-        hasten(side, slot, power);
+        dash(side, target, slot, .36);
+        quicken();
         break;
       case "haste":
-        hasten(side, slot, power);
+        quicken();
         break;
       case "heal":
-        heal(side, power, slot);
+        restore(power);
         break;
       case "heal-burn":
-        heal(side, 8, slot);
+        restore(8);
         break;
       case "rekindle":
-        heal(side, 10, slot);
+        restore(10);
         break;
     }
   }
 
-  function launch(side, slot, skill) {
+  function launch(side, target, slot, skill) {
     const path = { ...PATHS[skill.style], ...skill.path };
     const area = skill.style === "area";
     const travel = area ? path.duration : path.reach / path.speed;
     const startsAt = time + (area ? 0 : path.windup);
     const origin = fighters[side].pose;
-    const destination = fighters[1 - side].pose;
-    const direction = aim(origin, destination, side);
-    const shot = { id: ++attackSequence, side, slot, skill, hero: fighters[side].definition.id, style: skill.style,
+    const destination = fighters[target].pose;
+    const direction = aim(origin, destination, fighters[side].team);
+    const shot = { id: ++attackSequence, duo, side, target, slot, skill, hero: fighters[side].definition.id, style: skill.style,
       path, origin, destination, direction, travel, startsAt, endsAt: startsAt + travel };
     attacks.push(shot);
     const pathState = describeAttack(shot, time);
     emit(side, "launch", { attackId: shot.id, slot, effect: skill.effect, style: skill.style, origin: pathState.origin,
-      destination: pathState.destination, directionX: pathState.directionX, directionZ: pathState.directionZ });
+      destination: pathState.destination, directionX: pathState.directionX, directionZ: pathState.directionZ,
+      ...(duo && { target }) });
   }
 
-  function finishAttack({ shot, landed }) {
+  function planShot(shot, frames, end) {
+    const enemies = enemiesOf(shot.side);
+    if (shot.style === "area") {
+      if (shot.endsAt > end) return null;
+      const targets = [];
+      for (const { side } of enemies) {
+        const { x, z } = sample(frames[side], shot.endsAt);
+        if (Math.hypot(x - shot.destination.x, z - shot.destination.z) <= shot.path.radius + EPSILON) targets.push(side);
+      }
+      return { shot, at: shot.endsAt, targets };
+    }
+    let first = null;
+    for (const { side } of enemies) {
+      const contact = projectileContact(shot, frames[side], time, end);
+      if (contact !== null && (first === null || contact < first.at)) first = { shot, at: contact, targets: [side] };
+    }
+    return first ?? (shot.endsAt <= end ? { shot, at: shot.endsAt, targets: [] } : null);
+  }
+
+  function finishAttack({ shot, targets }) {
     attacks.splice(attacks.indexOf(shot), 1);
     const { side, slot, id, style, skill } = shot;
     const point = describeAttack(shot, time);
     const geometry = { attackId: id, style, x: point.x, z: point.z, radius: point.radius };
-    if (style === "area") emit(side, "burst", { target: 1 - side, slot, effect: skill.effect, ...geometry });
-    if (!landed) {
-      emit(side, "dodge", { target: 1 - side, slot, effect: skill.effect, ...geometry });
-      return;
+    if (style === "area") emit(side, "burst", { target: shot.target, slot, effect: skill.effect, ...geometry });
+    if (!targets.includes(shot.target)) {
+      emit(side, "dodge", { target: shot.target, slot, effect: skill.effect, ...geometry });
     }
-    const impact = damage(side, skill.damage, skill.effect, slot, geometry);
-    if (impact > 0 && ["burn", "heal-burn", "rekindle"].includes(skill.effect) && fighters[1 - side].hp > 0) {
-      fighters[1 - side].embers.push({ side, slot, amount: skill.power, next: time + 1, left: skill.effect === "rekindle" ? 4 : 3 });
+    for (const target of targets) {
+      if (duo && !living(fighters[target])) continue;
+      const impact = damage(side, target, skill.damage, skill.effect, slot, geometry);
+      if (impact > 0 && ["burn", "heal-burn", "rekindle"].includes(skill.effect) && living(fighters[target])) {
+        fighters[target].embers.push({ side, slot, amount: skill.power, next: time + 1,
+          left: skill.effect === "rekindle" ? 4 : 3 });
+      }
     }
   }
 
-  function cast(side, slot) {
+  function cast(side, slot, requested) {
     if (!validSide(side) || !Number.isInteger(slot) || slot < 0 || slot > 3 || winner !== null) return false;
     const fighter = fighters[side];
     if ((slot === 3 && !fighter.signature) || fighter.pending || fighter.readyAt[slot] > time
       || attacks.length + fighters.filter((candidate) => candidate.pending).length >= MAX_ATTACKS) return false;
+    const target = targetFor(side, requested);
+    if (target === null) return false;
     const skill = fighter.definition.skills[slot];
-    fighter.pending = { ...questionFor(slot), slot, deadline: time + skill.window };
-    emit(side, "cast", { slot, effect: skill.effect });
+    fighter.pending = { ...questionFor(slot), slot, target, deadline: time + skill.window };
+    emit(side, "cast", { slot, effect: skill.effect, ...(duo && { target }) });
     return true;
   }
 
   function resolve(side, correct, timedOut = false) {
     const fighter = fighters[side];
-    const slot = fighter.pending.slot;
+    const { slot, target } = fighter.pending;
     const skill = fighter.definition.skills[slot];
     fighter.pending = null;
     fighter.readyAt[slot] = time + skill.cooldown;
     if (!correct) {
-      emit(side, timedOut ? "timeout" : "miss", { slot, effect: skill.effect });
+      emit(side, timedOut ? "timeout" : "miss", { slot, effect: skill.effect, ...(duo && { target }) });
       return;
     }
-    activate(side, slot, skill);
-    launch(side, slot, skill);
+    const opponent = living(fighters[target]) ? target : targetFor(side, undefined, Infinity);
+    if (opponent === null) return;
+    activate(side, opponent, slot, skill);
+    launch(side, opponent, slot, skill);
   }
 
   function answer(side, index) {
@@ -453,6 +526,20 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     return true;
   }
 
+  function clearKnockouts() {
+    for (const fighter of fighters) {
+      if (living(fighter)) {
+        fighter.embers = fighter.embers.filter(({ side }) => living(fighters[side]));
+        continue;
+      }
+      fighter.pending = null;
+      fighter.embers = [];
+    }
+    for (let index = attacks.length - 1; index >= 0; index--) {
+      if (!living(fighters[attacks[index].side])) attacks.splice(index, 1);
+    }
+  }
+
   function tick(dt) {
     if (winner !== null || !Number.isFinite(dt) || dt <= 0) return;
     const end = time + dt;
@@ -464,7 +551,7 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
       let next = Infinity;
       const planned = [];
       for (const shot of attacks) {
-        const impact = awaitImpact(shot, frames[1 - shot.side], time, end);
+        const impact = planShot(shot, frames, end);
         if (!impact) continue;
         next = Math.min(next, impact.at);
         planned.push(impact);
@@ -479,7 +566,7 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
         if (fighter.pending?.deadline <= time) resolve(side, false, true);
         for (const ember of fighter.embers) {
           if (ember.next > time) continue;
-          damage(ember.side, ember.amount, "burn", ember.slot);
+          damage(ember.side, side, ember.amount, "burn", ember.slot);
           ember.next += 1;
           ember.left--;
         }
@@ -488,6 +575,7 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
       for (const impact of planned) {
         if (Math.abs(impact.at - time) <= EPSILON) finishAttack(impact);
       }
+      if (duo) clearKnockouts();
       if (endIfNeeded()) return;
     }
     time = end;
@@ -502,6 +590,7 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
         hero: fighter.definition.id,
         shield: fighter.shield,
         signature: fighter.signature,
+        ...(duo && { team: fighter.team }),
         cooldowns: Object.freeze(fighter.readyAt.map((readyAt) => Math.max(0, readyAt - time))),
       }))),
       pending: privatePending ? Object.freeze({
@@ -509,6 +598,7 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
         question: privatePending.question,
         choices: privatePending.choices,
         seconds: Math.max(0, privatePending.deadline - time),
+        ...(duo && { target: privatePending.target }),
       }) : null,
       winner,
       attacks: Object.freeze(attacks.map((shot) => describeAttack(shot, time))),
@@ -517,5 +607,5 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     });
   }
 
-  return Object.freeze({ cast, answer, botAnswer, setPose, tick, read });
+  return Object.freeze({ cast, answer, botAnswer, setPose, targetFor, tick, read });
 }

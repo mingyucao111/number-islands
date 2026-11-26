@@ -1,6 +1,6 @@
 /* Number Islands only caches public, same-origin game assets. */
 const CACHE_PREFIX = "number-islands-shell-";
-const CACHE_NAME = CACHE_PREFIX + "2026-11-26.4";
+const CACHE_NAME = CACHE_PREFIX + "2026-11-26.5";
 const BASE = new URL(self.registration.scope);
 const core = [
   "index.html", "expeditions.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",

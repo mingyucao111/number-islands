@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { createRankedStore, takePair } from "../server/ranked-rating.mjs";
+import { createRankedStore, takeDuo, takePair } from "../server/ranked-rating.mjs";
 
 function ranked(t, path) {
   const store = createRankedStore(path);
@@ -164,4 +164,108 @@ test("the longest waiting compatible player gets the closest available rival", (
   const earlier = entry("earlier", 1090, 1000);
   const unpairable = entry("unpairable", 900, 0, "p12");
   assert.deepEqual(takePair([nearby, earlier, unpairable, oldest], 9000), [oldest, nearby]);
+});
+
+const party = (partyId, player) => ({ ...player, partyId });
+
+test("four solos fill two teams with the closest team averages and the oldest compatible anchor", () => {
+  const oldest = entry("oldest", 1000, 1);
+  const strongest = entry("strongest", 1090, 2);
+  const third = entry("third", 1040, 3);
+  const fourth = entry("fourth", 1050, 4);
+  const unavailable = entry("waiting", 2000);
+  assert.equal(takeDuo([oldest, strongest, third], 5000), null);
+  assert.deepEqual(takeDuo([fourth, strongest, unavailable, third, oldest].values(), 5000), [[oldest, strongest], [third, fourth]]);
+});
+
+test("a full party stays together against solo fill, and incomplete or oversized parties do not enter", () => {
+  const first = party("party-1", entry("captain", 1010));
+  const second = party("party-1", entry("partner", 1190));
+  const soloA = entry("solo-a", 1080, 5);
+  const soloB = entry("solo-b", 1125, 6);
+  assert.deepEqual(takeDuo([soloB, first, soloA, second], 7000), [[first, second], [soloA, soloB]]);
+  assert.equal(takeDuo([first, soloA, soloB, entry("solo-c", 1100)], 5000), null);
+  assert.equal(takeDuo([first, second, soloA, soloB, party("party-1", entry("excess", 1100))], 5000), null);
+  const otherA = party("party-2", soloA);
+  const otherB = party("party-2", soloB);
+  assert.deepEqual(takeDuo([first, second, otherA, otherB], 5000), [[first, second], [otherA, otherB]]);
+});
+
+test("duo respects the newest player's range, the wait cap, distinct accounts and grade boundaries", () => {
+  const first = party("party-1", entry("a", 1000));
+  const second = party("party-1", entry("b", 1000));
+  const third = party("party-2", entry("c", 1200));
+  const fourth = party("party-2", entry("d", 1200, 6000));
+  assert.equal(takeDuo([first, second, third, fourth], 25999), null);
+  assert.deepEqual(takeDuo([first, second, third, fourth], 26000), [[first, second], [third, fourth]]);
+  assert.equal(takeDuo([first, second, { ...third, rating: 1500 }, { ...fourth, rating: 1500 }], 500000), null);
+  assert.equal(takeDuo([first, second, third, { ...fourth, route: "p12" }], 50000), null);
+  assert.equal(takeDuo([first, second, { ...third, route: "p12" }, { ...fourth, route: "p12" }], 50000), null);
+  assert.equal(takeDuo([first, second, third, { ...fourth, id: first.id }], 50000), null);
+});
+
+function duo(id, players, winner, route = "p34") {
+  return { id, route, mode: "duo", players, winner, reason: "completed" };
+}
+
+test("duo has a persistent independent ladder and returns only the original four-player settlement", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "number-islands-duo-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, "ranked.sqlite");
+  const firstRun = createRankedStore(path);
+  const players = Array.from({ length: 4 }, () => firstRun.createGuest());
+  const [a, b, c, d] = players;
+  firstRun.settle(match("solo-game", "p34", a, b, 1));
+  const input = duo("duo-game", players, 0);
+  const original = firstRun.settle(input);
+  assert.deepEqual(original.map(({ id, delta, profile }) => [id, delta, profile.rating, profile.wins]), [
+    [a.id, 16, 1016, 1], [b.id, 16, 1016, 1], [c.id, -16, 984, 0], [d.id, -16, 984, 0],
+  ]);
+  firstRun.close();
+
+  const reopened = ranked(t, path);
+  assert.deepEqual(reopened.settle(input), original);
+  assert.equal(reopened.settle(duo(input.id, [a, c, b, d], 0)), null);
+  assert.equal(reopened.settle(duo(input.id, players, 1)), null);
+  assert.deepEqual(reopened.profile(a.id, "p34", "solo"), { name: a.name, rank: "Placement", rating: 984, games: 1, wins: 0 });
+  assert.deepEqual(reopened.profile(a.id, "p34", "duo"), original[0].profile);
+  assert.equal(reopened.profile(a.id, "p56", "duo").games, 0);
+  assert.equal(reopened.profile(a.id, "p34", "squad"), null);
+  assert.deepEqual(reopened.leaderboard("p34", 20, "duo"), []);
+  reopened.settle(duo("duo-second", players, 0));
+  reopened.settle(duo("duo-third", players, "draw"));
+  assert.deepEqual(new Set(reopened.leaderboard("p34", 20, "duo").map(({ name }) => name)), new Set(players.map(({ name }) => name)));
+  assert.deepEqual(reopened.leaderboard("p34", 20, "solo"), []);
+  assert.deepEqual(reopened.leaderboard("p56", 20, "duo"), []);
+});
+
+test("duo rejects partial, repeated or unrated participants atomically", (t) => {
+  const store = ranked(t);
+  const players = Array.from({ length: 4 }, () => store.createGuest());
+  const [a, b, c] = players;
+  assert.equal(store.settle(duo("cancelled", players, null)), null);
+  assert.equal(store.settle(duo("three-players", players.slice(0, 3), 0)), null);
+  assert.equal(store.settle(duo("duplicate", [a, b, c, a], 1)), null);
+  assert.equal(store.settle(duo("invalid", [a, b, c, { id: "unknown" }], 0)), null);
+  assert.equal(store.settle({ ...duo("wrong-mode", players, 0), mode: "squad" }), null);
+  assert.ok(players.every(({ id }) => store.profile(id, "p34", "duo").games === 0));
+});
+
+test("duo Elo uses the average team strength and limits the whole team transfer at its weakest player's floor", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "number-islands-team-elo-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, "ranked.sqlite");
+  const initial = createRankedStore(path);
+  const players = Array.from({ length: 4 }, () => initial.createGuest());
+  initial.close();
+  const fixture = new DatabaseSync(path);
+  const seed = fixture.prepare("INSERT INTO ranked_duo_ratings (guest_id, route, rating, games, wins) VALUES (?, ?, ?, 3, 0)");
+  players.forEach(({ id }, index) => {
+    seed.run(id, "p34", [900, 1100, 950, 1250][index]);
+    seed.run(id, "k", [10, 20, 2, 8][index]);
+  });
+  fixture.close();
+  const store = ranked(t, path);
+  assert.deepEqual(store.settle(duo("underdogs", players, 0)).map(({ delta }) => delta), [20, 20, -20, -20]);
+  assert.deepEqual(store.settle(duo("team-floor", players, 0, "k")).map(({ delta, profile }) => [delta, profile.rating]), [[2, 12], [2, 22], [-2, 0], [-2, 6]]);
 });

@@ -20,8 +20,8 @@ function session(overrides = {}) {
   return { room, sent, results, latest };
 }
 
-function spell(room, latest, side, slot, now) {
-  assert.equal(room.message(side, { type: "cast", slot }, now), true);
+function spell(room, latest, side, slot, now, target) {
+  assert.equal(room.message(side, { type: "cast", slot, ...(target !== undefined && { target }) }, now), true);
   const pending = latest(side, "state").state.pending;
   const stars = [...pending.question.matchAll(/✦/gu)].length;
   const lost = Number(pending.question.match(/(\d+) sparks fly away/u)?.[1]) || 0;
@@ -169,4 +169,75 @@ test("long idle rooms expire unrated and a server scheduling lapse advances at m
   assert.equal(room.finished, true);
   assert.equal(results[0].reason, "expired");
   assert.equal(results[0].winner, null);
+});
+
+const quartet = [
+  ...pair,
+  { id: "charlie", hero: "gale", name: "Cedar" },
+  { id: "delta", hero: "gale", name: "Dogwood" },
+];
+
+test("duo room validates authenticated side, relays poses and rejects friendly and distant lock-on", () => {
+  const { room, latest } = session({ players: quartet });
+  room.tick(0);
+  assert.deepEqual(latest("delta", "state").state.fighters.map(({ team }) => team), [0, 0, 1, 1]);
+  assert.equal(room.message("alpha", { type: "pose", side: 1, x: -2, z: 5 }, 100), false);
+  assert.equal(room.message("alpha", { type: "pose", side: 0, x: -2.2, z: 5 }, 100), true);
+  for (const { id } of quartet.slice(1)) {
+    assert.deepEqual(latest(id, "pose"), { type: "pose", side: 0, x: -2.2, z: 5 });
+  }
+  assert.equal(room.message("alpha", { type: "cast", slot: 0, target: 1 }, 100), false);
+  assert.equal(room.message("alpha", { type: "cast", slot: 0, target: 4 }, 100), false);
+  assert.equal(room.message("charlie", { type: "pose", x: 2.3, z: -8 }, 1200), true);
+  assert.equal(room.message("alpha", { type: "cast", slot: 0, target: 2 }, 1200), false);
+  assert.equal(room.message("alpha", { type: "cast", slot: 0 }, 1200), true);
+  assert.equal(latest("alpha", "state").state.pending.target, 3);
+  for (const { id } of quartet.slice(1)) assert.equal(latest(id, "state").state.pending, null);
+});
+
+test("duo reconnect restores three poses and one absent team forfeits only after play and grace", () => {
+  const active = session({ players: quartet });
+  for (const { id } of quartet) assert.equal(active.room.message(id, { type: "cast", slot: 0 }, 10), true);
+  active.room.disconnect("delta", 1000);
+  active.room.disconnect("charlie", 1500);
+  active.room.tick(9000);
+  assert.equal(active.room.reconnect("charlie", 9500), true);
+  const relayed = active.sent.filter(({ id, packet }) => id === "charlie" && packet.type === "pose");
+  assert.deepEqual(relayed.map(({ packet }) => packet.side).sort(), [0, 1, 3]);
+  assert.equal(active.latest("charlie", "room-status").status, "disconnected");
+  assert.equal(active.room.finished, false);
+  active.room.tick(11_000);
+  assert.deepEqual(active.results, [{
+    id: "room-1", route: "k", mode: "duo", players: quartet, winner: 0, reason: "forfeit",
+  }]);
+
+  const early = session({ players: quartet });
+  early.room.disconnect("alpha", 1000);
+  early.room.tick(11_000);
+  assert.equal(early.results[0].winner, null);
+  assert.equal(early.results[0].reason, "expired");
+});
+
+test("duo room rates a real win only after both enemy fighters are knocked out", () => {
+  const { room, latest, results } = session({ players: quartet });
+  for (const slot of [0, 1, 2]) spell(room, latest, "alpha", slot, 0, 2);
+  for (let timestamp = 1000; timestamp <= 10_000; timestamp += 1000) room.tick(timestamp);
+  spell(room, latest, "alpha", 2, 10_000, 2);
+  room.tick(11_000);
+  room.tick(11_300);
+  assert.equal(latest("delta", "state").state.fighters[2].hp, 0);
+  assert.equal(room.finished, false);
+  assert.equal(room.message("charlie", { type: "pose", x: 2.2, z: -5 }, 11_300), false);
+  assert.equal(room.message("charlie", { type: "cast", slot: 0 }, 11_300), false);
+  for (const slot of [0, 1]) spell(room, latest, "alpha", slot, 11_300, 3);
+  for (let timestamp = 12_000; timestamp <= 20_000; timestamp += 1000) room.tick(timestamp);
+  spell(room, latest, "alpha", 2, 20_000, 3);
+  for (let timestamp = 21_000; timestamp <= 30_000; timestamp += 1000) room.tick(timestamp);
+  spell(room, latest, "alpha", 2, 30_000, 3);
+  room.tick(31_000);
+  room.tick(31_300);
+  assert.deepEqual(results, [{
+    id: "room-1", route: "k", mode: "duo", players: quartet, winner: 0, reason: "complete",
+  }]);
+  assert.equal(latest("delta", "state").state.winner, 0);
 });

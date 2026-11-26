@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { HEROES } from "../voyage/combat-rules.mjs";
 import { ROUTES } from "../voyage/progression.mjs";
 import { createRankedRoom } from "./ranked-room.mjs";
-import { createRankedStore, takePair } from "./ranked-rating.mjs";
+import { createRankedStore, takeDuo, takePair } from "./ranked-rating.mjs";
 
 const SITES = new Set(["https://mingyucao111.github.io", "capacitor://localhost", "ionic://localhost"]);
 const GRADES = new Set(ROUTES.map(({ id }) => id));
@@ -15,6 +15,7 @@ const LOCALHOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const MAX_SOCKETS = 160;
 const MAX_QUEUE = 120;
 const QUEUE_LIFETIME_MS = 2 * 60_000;
+const PARTY_LIFETIME_MS = 15 * 60_000;
 const MAX_GUESTS_PER_MINUTE = 160;
 const MAX_PENDING_BYTES = 256 * 1024;
 const RATE_CAP = 56;
@@ -73,6 +74,8 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
   const queue = new Map();
   const rooms = new Map();
   const activePlayer = new Map();
+  const parties = new Map();
+  const memberships = new Map();
   const issuance = [];
   let stopping = false;
   let shutdown;
@@ -92,6 +95,11 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
   }
 
   function matchPacket(session, id) {
+    if (session.mode === "duo") {
+      return { type: "match", matchId: session.id, route: session.route, mode: "duo",
+        side: session.players.findIndex((player) => player.id === id),
+        roster: session.players.map(({ name, hero }) => ({ name, hero })) };
+    }
     const side = session.players[0].id === id ? 0 : 1;
     const rival = session.players[1 - side];
     return { type: "match", matchId: session.id, route: session.route, side, rivalHero: rival.hero, rivalName: rival.name };
@@ -107,44 +115,123 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
       if (result.winner !== null && !updates) throw new Error("Could not settle rank.");
       for (const [side, { id }] of result.players.entries()) {
         const entry = updates?.find((record) => record.id === id);
+        const team = result.mode === "duo" ? Math.floor(side / 2) : side;
         const outcome = result.winner === null ? "expired"
-          : result.winner === "draw" ? "draw" : result.winner === side ? "win" : "loss";
+          : result.winner === "draw" ? "draw" : result.winner === team ? "win" : "loss";
         send(loggedIn.get(id), { type: "ranking", matchId: result.id, reason: result.reason, outcome,
-          delta: entry?.delta ?? 0, profile: entry?.profile ?? store.profile(id, result.route) });
+          delta: entry?.delta ?? 0, profile: entry?.profile ?? store.profile(id, result.route, result.mode) });
       }
     } catch {
       for (const { id } of result.players) error(loggedIn.get(id), "rating-unavailable", "This result could not be saved.");
     }
   }
 
+  function sendParty(id) {
+    const party = memberships.get(id);
+    const members = party?.members.map((member) => ({
+      name: member.name, online: loggedIn.has(member.id),
+      ready: queue.get(member.id)?.mode === "duo",
+    }));
+    send(loggedIn.get(id), { type: "party", party: party ? { code: party.code, route: party.route, members } : null });
+  }
+
+  function updateParty(party, timestamp) {
+    party.touched = timestamp;
+    for (const { id } of party.members) sendParty(id);
+  }
+
+  function cancelQueue(id, code = null) {
+    const entry = queue.get(id);
+    const party = entry?.partyId ? memberships.get(id) : null;
+    const members = party?.members.map((member) => member.id) ?? [id];
+    for (const guest of members) {
+      if (!party || queue.get(guest)?.partyId === party.code) queue.delete(guest);
+      if (code) error(loggedIn.get(guest), code, "No compatible team found this time. You can search again.");
+      else send(loggedIn.get(guest), { type: "canceled" });
+    }
+    if (party) updateParty(party, now());
+  }
+
+  function leaveParty(id) {
+    const party = memberships.get(id);
+    if (!party) return;
+    if (queue.get(id)?.mode === "duo") cancelQueue(id);
+    for (const member of party.members) {
+      memberships.delete(member.id);
+      if (queue.get(member.id)?.mode === "duo") cancelQueue(member.id);
+      sendParty(member.id);
+    }
+    parties.delete(party.code);
+  }
+
+  function partyAction(client, packet, timestamp) {
+    const { id, name } = client.guest;
+    if (activePlayer.has(id) || queue.has(id)) {
+      error(client, "busy", "Cancel your search or finish the match before changing your party.");
+      return;
+    }
+    if (packet.type === "party-leave" && keysAre(packet, ["type"])) {
+      leaveParty(id);
+      return;
+    }
+    if (!GRADES.has(packet.route)) return;
+    if (packet.type === "party-create" && keysAre(packet, ["type", "route"])) {
+      if (memberships.has(id)) { sendParty(id); return; }
+      if (parties.size >= MAX_SOCKETS) { error(client, "busy", "The party service is busy."); return; }
+      let code;
+      do { code = randomBytes(4).toString("hex").toUpperCase(); } while (parties.has(code));
+      const party = { code, route: packet.route, members: [{ id, name }], touched: timestamp };
+      parties.set(code, party);
+      memberships.set(id, party);
+      updateParty(party, timestamp);
+    } else if (packet.type === "party-join" && keysAre(packet, ["type", "route", "code"])
+      && typeof packet.code === "string" && /^[A-F0-9]{8}$/.test(packet.code)) {
+      const party = parties.get(packet.code);
+      if (memberships.get(id) === party && party) { sendParty(id); return; }
+      if (memberships.has(id) || !party || party.route !== packet.route || party.members.length !== 1) {
+        error(client, "party-unavailable", "That party is unavailable. Both players need the same grade and an open party.");
+        return;
+      }
+      if (!loggedIn.has(party.members[0].id) || activePlayer.has(party.members[0].id) || queue.has(party.members[0].id)) {
+        error(client, "party-unavailable", "Your teammate must be online in the lobby.");
+        return;
+      }
+      party.members.push({ id, name });
+      memberships.set(id, party);
+      updateParty(party, timestamp);
+    }
+  }
+
   function matchWaiting(timestamp) {
+    for (const party of parties.values()) {
+      if (timestamp - party.touched >= PARTY_LIFETIME_MS
+        && !party.members.some(({ id }) => activePlayer.has(id) || queue.has(id))) leaveParty(party.members[0].id);
+    }
     for (const [id, entry] of queue) {
       if (timestamp - entry.joinedAt < QUEUE_LIFETIME_MS) continue;
-      queue.delete(id);
-      error(loggedIn.get(id), "queue-expired", "No compatible rival found this time. You can search again.");
+      cancelQueue(id, "queue-expired");
     }
-    for (;;) {
-      const pair = takePair(queue.values(), timestamp);
-      if (!pair) return;
-      const [first, second] = pair;
-      queue.delete(first.id);
-      queue.delete(second.id);
-      const clients = pair.map(({ id }) => loggedIn.get(id));
-      if (clients.some((client) => client?.socket.readyState !== WebSocket.OPEN)) {
-        pair.forEach((entry, index) => {
-          if (clients[index]?.socket.readyState === WebSocket.OPEN) queue.set(entry.id, entry);
-        });
-        continue;
-      }
+    matchMode("solo", timestamp);
+    matchMode("duo", timestamp);
+  }
 
+  function matchMode(mode, timestamp) {
+    for (;;) {
+      const entries = [...queue.values()].filter((entry) => entry.mode === mode
+        && loggedIn.get(entry.id)?.socket.readyState === WebSocket.OPEN);
+      if (entries.length < (mode === "duo" ? 4 : 2)) return;
+      const pair = mode === "duo" ? takeDuo(entries, timestamp)?.flat() : takePair(entries, timestamp);
+      if (!pair) return;
+      for (const entry of pair) queue.delete(entry.id);
+      const clients = pair.map(({ id }) => loggedIn.get(id));
       const id = randomUUID();
-      const route = first.route;
+      const route = pair[0].route;
       const players = pair.map(({ id: guest, name, hero }) => ({ id: guest, name, hero }));
       const room = createRankedRoom({
         id, route, players, now: timestamp, onFinish: publishOutcome,
         send: (guest, packet) => send(loggedIn.get(guest), packet),
       });
-      const session = { id, route, players, room, voluntary: new Set() };
+      const session = { id, route, mode, players, room, voluntary: new Set() };
       rooms.set(id, session);
       for (const [side, player] of players.entries()) {
         activePlayer.set(player.id, session);
@@ -188,6 +275,8 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     clearTimeout(client.authTimer);
     loggedIn.set(guest.id, client);
     send(client, { type: "ready", token, name: guest.name });
+    const party = memberships.get(guest.id);
+    if (party) updateParty(party, timestamp);
     const session = activePlayer.get(guest.id);
     if (session && !session.voluntary.has(guest.id)) {
       session.room.tick(timestamp);
@@ -202,7 +291,9 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     const id = client.guest?.id;
     if (!id || loggedIn.get(id) !== client) return;
     loggedIn.delete(id);
-    queue.delete(id);
+    if (queue.has(id)) cancelQueue(id);
+    const party = memberships.get(id);
+    if (party) updateParty(party, timestamp);
     const session = activePlayer.get(id);
     if (voluntary) session?.voluntary.add(id);
     session?.room.disconnect(id, timestamp);
@@ -241,11 +332,18 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     const { id, name } = client.guest;
     if (loggedIn.get(id) !== client) return;
     const session = activePlayer.get(id);
-    if (packet.type === "board" && keysAre(packet, ["type", "route"]) && GRADES.has(packet.route)) {
+    const hasMode = Object.hasOwn(packet, "mode");
+    const mode = hasMode ? packet.mode : "solo";
+    const validMode = mode === "solo" || mode === "duo";
+    if (["party-create", "party-join", "party-leave"].includes(packet.type)) {
+      partyAction(client, packet, timestamp);
+    } else if (packet.type === "board" && keysAre(packet, hasMode ? ["type", "route", "mode"] : ["type", "route"])
+      && validMode && GRADES.has(packet.route)) {
       const route = packet.route;
-      send(client, { type: "board", route, profile: store.profile(id, route), leaders: store.leaderboard(route) });
-    } else if (packet.type === "queue" && keysAre(packet, ["type", "route", "hero"])
-      && GRADES.has(packet.route) && typeof packet.hero === "string" && Object.hasOwn(HEROES, packet.hero)) {
+      send(client, { type: "board", route, ...(hasMode && { mode }), profile: store.profile(id, route, mode),
+        leaders: store.leaderboard(route, 20, mode) });
+    } else if (packet.type === "queue" && keysAre(packet, hasMode ? ["type", "route", "hero", "mode"] : ["type", "route", "hero"])
+      && validMode && GRADES.has(packet.route) && typeof packet.hero === "string" && Object.hasOwn(HEROES, packet.hero)) {
       if (session) {
         error(client, "in-match", "Finish the current duel before joining the queue.");
         return;
@@ -256,17 +354,23 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
         return;
       }
       const { route, hero } = packet;
-      if (!prior || prior.route !== route || prior.hero !== hero) {
-        queue.set(id, { id, name, route, hero, rating: store.profile(id, route).rating, joinedAt: timestamp });
+      const party = mode === "duo" ? memberships.get(id) : null;
+      if (party && (party.route !== route || party.members.length !== 2
+        || party.members.some((member) => !loggedIn.has(member.id) || activePlayer.has(member.id)
+          || queue.get(member.id)?.mode === "solo"))) {
+        error(client, "party-not-ready", "Both teammates need to be online in this grade's 2v2 lobby.");
+        return;
       }
-      send(client, { type: "queued", route });
+      if (!prior || prior.route !== route || prior.hero !== hero || prior.mode !== mode) {
+        if (prior) cancelQueue(id);
+        queue.set(id, { id, name, route, hero, mode, partyId: party?.code, rating: store.profile(id, route, mode).rating, joinedAt: timestamp });
+      }
+      send(client, { type: "queued", route, ...(hasMode && { mode }) });
+      if (party) updateParty(party, timestamp);
       matchWaiting(timestamp);
     } else if (packet.type === "cancel" && keysAre(packet, ["type"])) {
       if (session) error(client, "in-match", "Leave the active duel through its exit.");
-      else {
-        queue.delete(id);
-        send(client, { type: "canceled" });
-      }
+      else cancelQueue(id);
     } else if (packet.type === "leave" && keysAre(packet, ["type"])) {
       drop(client, timestamp, true);
       client.socket.close(1000, "Left ranked");

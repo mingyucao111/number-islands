@@ -362,3 +362,103 @@ test("snapshots cannot mutate the duel and invalid clock or pose updates are rej
   assert.equal(match.botAnswer(0, "true"), false);
   assert.equal(match.answer(2, 1), false);
 });
+
+test("duos track each fighter, keep prompts private and target the closest living enemy by default", () => {
+  const combat = createCombat({ heroes: ["gale", "warden", "ember", "gale"] });
+  assert.deepEqual(combat.read().fighters.map(({ team, hp }) => [team, hp]), [[0, 100], [0, 100], [1, 100], [1, 100]]);
+  assert.equal(combat.cast(0, 0, 1), false);
+  assert.equal(combat.cast(4, 0, 2), false);
+  assert.equal(combat.cast(0, 0, 2), true);
+  assert.equal(combat.read(0).pending.target, 2);
+  for (const side of [1, 2, 3]) assert.equal(combat.read(side).pending, null);
+  assert.equal(combat.botAnswer(0, true), true);
+  assert.equal(combat.read().attacks[0].target, 2);
+  assert.equal(combat.cast(1, 0), true);
+  assert.equal(combat.read(1).pending.target, 2);
+  assert.equal(combat.cast(3, 0), true);
+  assert.equal(combat.read(3).pending.target, 0);
+});
+
+test("nearby teammates receive shielding, healing and haste, and concentrated shots earn a combo", () => {
+  const combat = createCombat({ heroes: ["warden", "ember", "gale", "gale"] });
+  attack(combat, 3, 0);
+  combat.tick(2);
+  assert.equal(combat.read().fighters[0].hp, 90);
+  attack(combat, 0, 0);
+  assert.deepEqual(combat.read().fighters.map(({ shield }) => shield), [4, 2, 0, 0]);
+  assert.equal(combat.cast(1, 0, 3), true);
+  combat.botAnswer(1, true);
+  assert.equal(combat.read().fighters[0].hp, 92);
+  assert.equal(lastEvent(combat, "heal").target, 0);
+  combat.setPose(1, { x: 5, z: 8 });
+  attack(combat, 0, 1);
+  assert.equal(combat.read().fighters[1].shield, 2);
+  combat.tick(2);
+  assert.ok(combat.read().events.some(({ kind, side, ally, target, amount }) =>
+    kind === "combo" && side === 1 && ally === 0 && target === 3 && amount === 4));
+
+  const winds = createCombat({ heroes: ["gale", "gale", "warden", "ember"] });
+  attack(winds, 1, 1);
+  attack(winds, 0, 1);
+  assert.equal(winds.read().fighters[1].cooldowns[1], 4.5);
+  assert.deepEqual([lastEvent(winds, "haste").side, lastEvent(winds, "haste").target], [0, 1]);
+});
+
+test("team projectiles and ground spells can hit exposed enemies but cannot damage allies", () => {
+  const combat = createCombat({ heroes: ["gale", "gale", "gale", "gale"] });
+  combat.setPose(0, { x: 0, z: 4 });
+  combat.setPose(1, { x: 0, z: 2 });
+  combat.setPose(2, { x: 0, z: -4 });
+  combat.setPose(3, { x: 0, z: -3.3 });
+  combat.tick(.1);
+  assert.equal(combat.cast(0, 0, 2), true);
+  combat.botAnswer(0, true);
+  combat.tick(2);
+  assert.deepEqual(combat.read().fighters.map(({ hp }) => hp), [100, 100, 100, 90]);
+  assert.equal(lastEvent(combat, "hit").target, 3);
+  combat.setPose(1, { x: 0, z: -3.7 });
+  attack(combat, 0, 2);
+  combat.tick(2);
+  assert.deepEqual(combat.read().fighters.map(({ hp }) => hp), [100, 100, 64, 54]);
+});
+
+test("a duo stays in play with one teammate down, then settles on a second knockout", () => {
+  const combat = createCombat({ heroes: ["gale", "gale", "gale", "gale"] });
+  assert.equal(combat.cast(2, 2), true);
+  for (const slot of [0, 1, 2]) {
+    assert.equal(combat.cast(0, slot, 2), true);
+    combat.botAnswer(0, true);
+  }
+  combat.tick(10);
+  assert.equal(combat.cast(0, 2, 2), true);
+  combat.botAnswer(0, true);
+  combat.tick(2);
+  assert.equal(combat.read().fighters[2].hp, 0);
+  assert.equal(combat.read(2).pending, null);
+  assert.equal(combat.read().winner, null);
+  assert.equal(combat.cast(2, 0), false);
+  assert.equal(combat.setPose(2, { x: 0, z: 0 }), false);
+  assert.equal(combat.cast(0, 0, 2), false);
+  for (const slot of [0, 1, 2]) {
+    if (slot === 2) combat.tick(8);
+    attack(combat, 0, slot);
+  }
+  assert.equal(combat.read().attacks.at(-1).target, 3);
+  combat.tick(10);
+  attack(combat, 0, 2);
+  combat.tick(2);
+  assert.equal(combat.read().winner, 0);
+  assert.deepEqual(combat.read().fighters.map(({ hp }) => hp), [100, 100, 0, 0]);
+});
+
+test("four active fighters cannot overflow the ranked snapshot or its projectile capacity", () => {
+  const combat = createCombat({ heroes: ["gale", "warden", "ember", "gale"], signatures: [true, true, true, true] });
+  for (const side of [0, 1, 2, 3]) {
+    for (const slot of [0, 1, 2]) attack(combat, side, slot);
+  }
+  assert.equal(combat.read().attacks.length, 12);
+  assert.equal(combat.cast(3, 3), false);
+  const snapshot = combat.read(3);
+  assert.ok(snapshot.events.length <= 32);
+  assert.ok(Buffer.byteLength(JSON.stringify({ type: "state", route: "s23", state: snapshot })) <= MAX_DUEL_PACKET_BYTES);
+});

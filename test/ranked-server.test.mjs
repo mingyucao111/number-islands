@@ -56,9 +56,10 @@ async function fixture(testCase, options = {}) {
   return { game, endpoint, port, open, guest, step };
 }
 
-async function join(client, route, hero) {
-  client.send({ type: "queue", route, hero });
-  assert.equal((await client.take("queued")).route, route);
+async function join(client, route, hero, mode) {
+  client.send({ type: "queue", route, hero, ...(mode && { mode }) });
+  const queued = await client.take("queued");
+  assert.deepEqual([queued.route, queued.mode], [route, mode]);
 }
 
 async function paired(left, right, route = "k") {
@@ -71,22 +72,28 @@ async function paired(left, right, route = "k") {
   return leftMatch.matchId;
 }
 
-async function spell(client, slot) {
-  client.send({ type: "cast", slot });
-  const { state } = await client.take("state", ({ state: sample }) => sample.pending?.slot === slot);
+async function spell(client, slot, { side = 0, target } = {}) {
+  const latestCast = (sample) => sample.events.findLast((event) => event.kind === "cast"
+    && event.side === side && event.slot === slot);
+  client.send({ type: "cast", slot, ...(target !== undefined && { target }) });
+  const { state } = await client.take("state", ({ state: sample }) => sample.pending?.slot === slot
+    && (latestCast(sample)?.id ?? 0) > (client.lastCast ?? 0));
   const { pending } = state;
+  client.lastCast = latestCast(state).id;
+  if (target !== undefined) assert.equal(pending.target, target);
   const stars = [...pending.question.matchAll(/✦/gu)].length;
   const lost = Number(pending.question.match(/(\d+) sparks fly away/u)?.[1]) || 0;
   const choice = pending.choices.indexOf(String(stars - lost));
   assert.notEqual(choice, -1);
   client.send({ type: "answer", slot: choice });
   await client.take("state", ({ state: sample }) => !sample.pending
-    && sample.events.some(({ kind, side, slot: launched }) => kind === "launch" && side === 0 && launched === slot));
+    && sample.events.some((event) => event.kind === "launch" && event.side === side
+      && event.slot === slot && event.id > client.lastCast));
 }
 
-async function board(client, route) {
-  client.send({ type: "board", route });
-  return client.take("board", ({ route: incoming }) => incoming === route);
+async function board(client, route, mode) {
+  client.send({ type: "board", route, ...(mode && { mode }) });
+  return client.take("board", (message) => message.route === route && message.mode === mode);
 }
 
 async function expectRefusal(url, origin, status) {
@@ -232,4 +239,125 @@ test("real token reconnect resumes a dropped match but intentional leave cannot 
   step(10_000);
   const expired = await left.take("ranking");
   assert.deepEqual([expired.reason, expired.outcome, expired.profile.games], ["expired", "expired", 0]);
+});
+
+async function matchedDuo(clients, route = "k") {
+  const handshakes = await Promise.all(clients.map((client) => client.take("match")));
+  const first = handshakes[0];
+  assert.deepEqual(handshakes.map(({ side }) => side).sort(), [0, 1, 2, 3]);
+  for (const [index, match] of handshakes.entries()) {
+    assert.deepEqual([match.matchId, match.route, match.mode], [first.matchId, route, "duo"]);
+    assert.deepEqual(match.roster, first.roster);
+    assert.equal(match.roster[match.side].name, clients[index].ready.name);
+    assert.deepEqual(Object.keys(match.roster[match.side]).sort(), ["hero", "name"]);
+  }
+  return handshakes;
+}
+
+test("four solo entries can form two teams without mixing grade, rank mode or answer prompts", async (t) => {
+  const { guest, step } = await fixture(t);
+  const clients = await Promise.all(Array.from({ length: 4 }, () => guest()));
+  const [first, second, third, fourth] = clients;
+  await join(first, "k", "gale", "duo");
+  await join(second, "k", "warden", "duo");
+  await join(third, "k", "ember", "duo");
+  await join(fourth, "p12", "gale", "duo");
+  await board(fourth, "p12", "duo");
+  assert.ok(clients.every((client) => !client.inbox.some(({ type }) => type === "match")));
+
+  fourth.send({ type: "cancel" });
+  await fourth.take("canceled");
+  await join(fourth, "k", "gale");
+  await board(fourth, "k");
+  assert.ok(clients.every((client) => !client.inbox.some(({ type }) => type === "match")));
+  fourth.send({ type: "cancel" });
+  await fourth.take("canceled");
+  await join(fourth, "k", "gale", "duo");
+  const [{ side: home }] = await matchedDuo(clients);
+  for (const client of clients) {
+    const { state } = await client.take("state");
+    assert.deepEqual(state.fighters.map(({ team, hp }) => [team, hp]), [[0, 100], [0, 100], [1, 100], [1, 100]]);
+  }
+  const target = home < 2 ? 2 : 0;
+  first.send({ type: "cast", slot: 0, target });
+  const { state: privateState } = await first.take("state", ({ state }) => state.pending?.target === target);
+  assert.match(privateState.pending.question, /Count the sparks/u);
+  assert.doesNotMatch(JSON.stringify(privateState), /answerIndex/u);
+  step(150);
+  for (const peer of clients.slice(1)) {
+    const { state } = await peer.take("state", ({ state }) => state.events.some(({ kind }) => kind === "cast"));
+    assert.equal(state.pending, null);
+  }
+});
+
+test("a premade stays on one team through cancellation, a real math duel and requeue", async (t) => {
+  const { guest, step } = await fixture(t);
+  const clients = await Promise.all(Array.from({ length: 4 }, () => guest()));
+  const [leader, friend, rival, other] = clients;
+  leader.send({ type: "party-create", route: "k" });
+  const { party: created } = await leader.take("party");
+  assert.match(created.code, /^[A-F0-9]{8}$/u);
+  assert.deepEqual(created.members, [{ name: leader.ready.name, online: true, ready: false }]);
+  friend.send({ type: "party-join", route: "s1", code: created.code });
+  assert.equal((await friend.take("error")).code, "party-unavailable");
+  friend.send({ type: "party-join", route: "k", code: created.code });
+  for (const client of [leader, friend]) {
+    const { party } = await client.take("party", ({ party }) => party?.members.length === 2);
+    assert.deepEqual(party.members.map(({ name }) => name), [leader.ready.name, friend.ready.name]);
+  }
+  await join(leader, "k", "gale", "duo");
+  await join(friend, "k", "warden", "duo");
+  for (const client of [leader, friend]) await client.take("party", ({ party }) => party.members.every(({ ready }) => ready));
+  friend.send({ type: "cancel" });
+  for (const client of [leader, friend]) {
+    await client.take("canceled");
+    assert.ok(await client.take("party", ({ party }) => party.code === created.code && party.members.every(({ ready }) => !ready)));
+  }
+  await join(rival, "k", "gale", "duo");
+  await join(other, "k", "gale", "duo");
+  await board(other, "k", "duo");
+  assert.ok(clients.every((client) => !client.inbox.some(({ type }) => type === "match")));
+  await join(leader, "k", "gale", "duo");
+  await board(leader, "k", "duo");
+  assert.ok(clients.every((client) => !client.inbox.some(({ type }) => type === "match")));
+  await join(friend, "k", "warden", "duo");
+  const [leaderMatch, friendMatch, rivalMatch, otherMatch] = await matchedDuo(clients);
+  const homeTeam = Math.floor(leaderMatch.side / 2);
+  assert.equal(Math.floor(friendMatch.side / 2), homeTeam);
+  assert.equal(Math.floor(rivalMatch.side / 2), 1 - homeTeam);
+
+  const firstTarget = { side: leaderMatch.side, target: rivalMatch.side };
+  const nextTarget = { side: leaderMatch.side, target: otherMatch.side };
+  const reachTime = async (second, ms = 1000) => {
+    step(ms);
+    await leader.take("state", ({ state }) => state.time + 1e-6 >= second);
+  };
+  for (const slot of [0, 1, 2]) await spell(leader, slot, firstTarget);
+  for (let second = 1; second <= 10; second++) await reachTime(second);
+  await spell(leader, 2, firstTarget);
+  await reachTime(11);
+  step(300);
+  const { state: knockout } = await leader.take("state", ({ state }) => state.fighters[rivalMatch.side].hp === 0);
+  assert.equal(knockout.winner, null);
+  assert.ok(clients.every((client) => !client.inbox.some(({ type }) => type === "ranking")));
+  for (const slot of [0, 1]) await spell(leader, slot, nextTarget);
+  await reachTime(12, 700);
+  for (let second = 13; second <= 20; second++) await reachTime(second);
+  await spell(leader, 2, nextTarget);
+  for (let second = 21; second <= 30; second++) await reachTime(second);
+  await spell(leader, 2, nextTarget);
+  await reachTime(31);
+  step(300);
+  for (const [index, client] of clients.entries()) {
+    const match = await client.take("ranking");
+    assert.deepEqual([match.matchId, match.reason, match.profile.games], [leaderMatch.matchId, "complete", 1]);
+    assert.deepEqual([match.outcome, match.delta, match.profile.wins], index < 2 ? ["win", 16, 1] : ["loss", -16, 0]);
+    assert.equal((await board(client, "k", "duo")).profile.games, 1);
+    assert.equal((await board(client, "k")).profile.games, 0);
+    assert.equal((await board(client, "s1", "duo")).profile.games, 0);
+  }
+  for (const [index, client] of clients.entries()) await join(client, "k", index === 1 ? "warden" : "gale", "duo");
+  const [freshLeader, freshFriend] = await matchedDuo(clients);
+  assert.notEqual(freshLeader.matchId, leaderMatch.matchId);
+  assert.equal(Math.floor(freshLeader.side / 2), Math.floor(freshFriend.side / 2));
 });

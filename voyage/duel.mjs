@@ -1,4 +1,4 @@
-import { HEROES, createCombat } from "./combat-rules.mjs";
+import { HEROES, combatSpawn, createCombat } from "./combat-rules.mjs";
 import { createDuelArena } from "./duel-arena.mjs";
 import { SIGNATURE_LEVEL, SIGNATURE_PRICE } from "./hero-growth.mjs";
 import { ROUTES } from "./progression.mjs";
@@ -24,8 +24,8 @@ function point(value) {
     && Number.isFinite(value.z) && Math.abs(value.z) <= 42;
 }
 
-function readSnapshot(state) {
-  if (!state || typeof state !== "object" || !Array.isArray(state.fighters) || state.fighters.length !== 2
+function readSnapshot(state, size) {
+  if (!state || typeof state !== "object" || !Array.isArray(state.fighters) || state.fighters.length !== size
     || ![null, 0, 1, "draw"].includes(state.winner) || !Number.isFinite(state.time) || state.time < 0) return null;
   if (state.fighters.some((fighter) => !fighter || !knownHero(fighter.hero)
     || !Number.isFinite(fighter.hp) || fighter.hp < 0 || fighter.hp > 100
@@ -40,11 +40,11 @@ function readSnapshot(state) {
   if (!Array.isArray(state.events) || state.events.length > 32
     || state.events.some((event) => !event || typeof event.kind !== "string" || event.kind.length > 16
       || !Number.isSafeInteger(event.id) || event.id < 1
-      || (event.kind !== "victory" && event.side !== 0 && event.side !== 1))) return null;
+      || (event.kind !== "victory" && !(Number.isInteger(event.side) && event.side >= 0 && event.side < size)))) return null;
   if (!Array.isArray(state.attacks) || state.attacks.length > 12
     || state.attacks.some((attack) => !point(attack) || !point(attack.origin) || !point(attack.destination)
       || !Number.isSafeInteger(attack.id) || attack.id < 1 || !knownHero(attack.hero) || !validSlot(attack.slot)
-      || (attack.side !== 0 && attack.side !== 1) || !knownStyle(attack.style)
+      || !Number.isInteger(attack.side) || attack.side < 0 || attack.side >= size || !knownStyle(attack.style)
       || !["windup", "projectile", "telegraph"].includes(attack.phase)
       || !Number.isFinite(attack.radius) || attack.radius <= 0 || attack.radius > 4
       || !Number.isFinite(attack.directionX) || Math.abs(attack.directionX) > 1
@@ -61,12 +61,23 @@ function label(element, value) {
 export function createArenaDuel(root, { route, hero, progress, connection, player, sound, onExit, onRankedAction, onComplete }) {
   const solo = !connection;
   const ranked = connection?.kind === "ranked";
+  const teamMode = ranked && connection.mode === "duo";
   const side = connection?.side ?? 0;
-  const remoteSide = 1 - side;
-  let enemy = ranked ? connection.rivalHero : hero === "warden" ? "ember" : "warden";
-  const map = createDuelArena(root, { side, rivalHero: enemy });
-  const other = { x: 0, z: side === 0 ? -5 : 5 };
-  const exit = { x: 0, y: 0, z: side === 0 ? 10 : -10 };
+  const size = teamMode ? 4 : 2;
+  const teamOf = (playerSide) => teamMode ? Math.floor(playerSide / 2) : playerSide;
+  const validSide = (playerSide) => Number.isInteger(playerSide) && playerSide >= 0 && playerSide < size;
+  const homeTeam = teamOf(side);
+  const opponents = teamMode ? (homeTeam === 0 ? [2, 3] : [0, 1]) : [1 - side];
+  const remoteSide = opponents[0];
+  const allySide = side ^ 1;
+  const roster = teamMode ? connection.roster.map((entry, slot) => ({ ...entry, side: slot })) : [];
+  const positions = Array.from({ length: size }, (_, slot) => combatSpawn(slot, teamMode));
+  const other = positions[remoteSide];
+  let targetSide = teamMode ? 3 - side : remoteSide;
+  let enemy = teamMode ? roster[targetSide].hero
+    : ranked ? connection.rivalHero : hero === "warden" ? "ember" : "warden";
+  const map = createDuelArena(root, { side, rivalHero: enemy, teamMode, roster });
+  const exit = { x: 0, y: 0, z: homeTeam === 0 ? 10 : -10 };
   const signature = !ranked && progress.signature;
   const dodgeCooldown = ranked ? 2.8 : progress.dodgeCooldown;
   let combat = solo ? createCombat({ heroes: [hero, enemy], route, signatures: [signature, signature] }) : null;
@@ -95,16 +106,20 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   const spells = [...ui.querySelectorAll("[data-duel-slot]")];
   const answers = [...ui.querySelectorAll("[data-duel-answer]")];
   const dodgeButton = get("duel-dodge");
+  const targetButtons = [get("duel-foe-1"), get("duel-foe-2")];
 
   const playerPosition = () => {
     const p = player().position;
     return { x: p.x, z: p.z };
   };
   const displayName = (id) => HEROES[id]?.name ?? "";
-  const battlePosition = (whichSide) => whichSide === side ? playerPosition() : other;
+  const battlePosition = (whichSide) => whichSide === side ? playerPosition() : positions[whichSide] ?? other;
+  const isOut = (slot) => snapshot?.fighters[slot]?.hp === 0;
+  const localCanMove = () => !roomPaused && (!teamMode || !isOut(side) || snapshot?.winner != null || ranking);
   const close = (limit) => {
     const current = playerPosition();
-    return Math.hypot(current.x - other.x, current.z - other.z) <= limit;
+    const target = positions[targetSide];
+    return Math.hypot(current.x - target.x, current.z - target.z) <= limit;
   };
 
   function showStatus(text) {
@@ -135,7 +150,7 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     }
     if (ranked && message.type === "room-status") {
       roomPaused = message.status === "disconnected";
-      player().setEnabled(!roomPaused);
+      player().setEnabled(Boolean(localCanMove()));
       pendingAnswer = false;
     } else if (ranked && message.type === "self-pose" && point(message) && map.canWalk(message.x, message.z)) {
       player().reset({ x: message.x, z: message.z, yaw: map.spawn.yaw });
@@ -166,10 +181,13 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       }
     } else if (message.type === "pose" && Number.isFinite(message.x) && Number.isFinite(message.z)
       && map.canWalk(message.x, message.z)) {
-      other.x = message.x;
-      other.z = message.z;
+      const slot = teamMode ? message.side : remoteSide;
+      if (validSide(slot) && slot !== side) {
+        positions[slot].x = message.x;
+        positions[slot].z = message.z;
+      }
     } else if (message.type === "state" && (ranked || side === 1)) {
-      const received = readSnapshot(message.state);
+      const received = readSnapshot(message.state, size);
       if (!received || versionMismatch || (snapshot && received.time < snapshot.time)
         || received.fighters[side].hero !== hero || received.fighters[side].signature !== signature
         || (ranked ? message.route !== route : !ROUTES.some((item) => item.id === message.route))) return;
@@ -179,7 +197,11 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       if (!received.pending || !wasPending || received.pending.slot !== wasPending.slot || received.pending.question !== wasPending.question) {
         pendingAnswer = false;
       }
-      enemy = received.fighters[remoteSide].hero;
+      if (teamMode) {
+        if (isOut(targetSide)) targetSide = opponents.find((slot) => !isOut(slot)) ?? targetSide;
+        player().setEnabled(Boolean(localCanMove()));
+      }
+      enemy = received.fighters[targetSide].hero;
       settle();
     } else if (side === 0 && combat && !left && validSlot(message.slot)) {
       syncPose();
@@ -193,13 +215,25 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   function keyboard(event) {
     if (disposed || event.repeat || event.altKey || event.metaKey || event.ctrlKey || event.target?.matches("textarea, input, select")) return;
     if (event.code === "KeyF") { event.preventDefault(); dodge(); return; }
+    if (teamMode && event.code === "KeyT" && isActive() && !snapshot.pending) {
+      event.preventDefault();
+      selectTarget(opponents.find((slot) => slot !== targetSide && !isOut(slot)) ?? targetSide);
+      return;
+    }
     if (!/^Digit[1234]$/.test(event.code)) return;
     event.preventDefault();
     use(Number(event.code.slice(-1)) - 1);
   }
 
   function isActive() {
-    return Boolean(snapshot) && !left && !versionMismatch && !ranking && !roomPaused && snapshot.winner === null;
+    return Boolean(snapshot) && !left && !versionMismatch && !ranking && !roomPaused && !isOut(side) && snapshot.winner === null;
+  }
+
+  function selectTarget(slot) {
+    if (!teamMode || !isActive() || snapshot.pending || !opponents.includes(slot) || isOut(slot)) return;
+    targetSide = slot;
+    canvasFocus();
+    paint();
   }
 
   function dodge() {
@@ -228,7 +262,7 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     } else {
       sendPose();
       pendingAnswer = isAnswer && connection.send({ type: "answer", slot });
-      if (!isAnswer) connection.send({ type: "cast", slot });
+      if (!isAnswer) connection.send(teamMode ? { type: "cast", slot, target: targetSide } : { type: "cast", slot });
     }
     canvasFocus();
     animateEvents();
@@ -250,12 +284,13 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
 
   function paint() {
     const local = snapshot?.fighters[side];
-    const rival = snapshot?.fighters[remoteSide];
-    const mode = ranked ? "Ranked duel" : solo ? "Practice duel" : "Friend duel";
+    const rival = snapshot?.fighters[targetSide];
+    const mode = teamMode ? "Ranked 2v2" : ranked ? "Ranked duel" : solo ? "Practice duel" : "Friend duel";
     label(get("duel-battle-name"), mode);
     label(get("duel-you"), `${displayName(local?.hero ?? hero)} · Lv ${progress.level}`);
     const rivalHero = displayName(rival?.hero ?? enemy);
-    label(get("duel-rival"), ranked && connection.rivalName ? connection.rivalName : rivalHero);
+    label(get("duel-rival"), teamMode ? roster[targetSide].name
+      : ranked && connection.rivalName ? connection.rivalName : rivalHero);
     get("duel-rival").title = ranked ? rivalHero : "";
     fillMeter("you", local);
     fillMeter("rival", rival);
@@ -285,20 +320,22 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       button.style.setProperty("--cooldown", `${100 * remaining / skill.cooldown}%`);
       button.setAttribute("aria-label", `${skill.name}, ${text}. ${effectNames[skill.effect] ?? skill.effect}.`);
     });
-    const winner = ranking?.outcome === "win" ? side : ranking?.outcome === "loss" ? remoteSide
+    const winner = ranking?.outcome === "win" ? homeTeam : ranking?.outcome === "loss" ? 1 - homeTeam
       : ranking?.outcome === "draw" ? "draw" : snapshot?.winner;
     const ended = winner != null || Boolean(ranking) || (ranked && left);
     const position = playerPosition();
-    const danger = active && snapshot.attacks.some((attack) => attack.side !== side && attack.phase === "telegraph"
+    const danger = active && snapshot.attacks.some((attack) => teamOf(attack.side) !== homeTeam && attack.phase === "telegraph"
       && Math.hypot(position.x - attack.x, position.z - attack.z) <= attack.radius + .4);
     const message = ranking?.outcome === "expired" ? "Match ended without a score."
       : ranked && left && winner == null ? "Connection to Ranked Arena ended."
-        : ended ? `${winner === "draw" ? "A draw." : winner === side ? "You won!" : "Your rival won."} ${ranked ? "" : "Head to the return arch."}`.trim()
+        : ended ? `${winner === "draw" ? "A draw." : winner === homeTeam ? (teamMode ? "Your team won!" : "You won!")
+          : (teamMode ? "The other team won." : "Your rival won.")} ${ranked ? "" : "Head to the return arch."}`.trim()
       : versionMismatch ? "Both players need to refresh the game before duelling."
         : left ? "Your friend disconnected. The return arch is behind you."
           : roomPaused ? "Waiting for your rival to reconnect…"
             : !snapshot ? "Meeting your rival…"
-            : danger ? "Move out of the marked circle!"
+            : teamMode && isOut(side) ? "Knocked out. Your teammate is still fighting."
+              : danger ? "Move out of the marked circle!"
               : pending ? `Answer to cast ${HEROES[hero].skills[pending.slot].name}.`
                 : statusUntil > clock ? status : "Move out of the path of incoming spells.";
     const log = get("duel-log");
@@ -309,7 +346,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     dodgeButton.disabled = dodgeIn > 0;
     dodgeButton.title = `Dodge · ${dodgeCooldown}s recharge`;
     label(dodgeButton.querySelector("small"), dodgeIn ? `${dodgeIn}s` : "Dodge");
-    label(get("duel-controls"), active ? `WASD move · F ${dodgeIn ? "dodge in " + dodgeIn + "s" : "dodge"} · ${signature ? "1–4" : "1–3"} cast` : "");
+    label(get("duel-controls"), active ? `WASD move · F ${dodgeIn ? "dodge in " + dodgeIn + "s" : "dodge"} · ${signature ? "1–4" : "1–3"} cast${teamMode ? " · T target" : ""}` : "");
+    get("duel-allies").hidden = !teamMode || ended;
+    get("duel-team-targets").hidden = !teamMode || ended;
+    if (teamMode && !ended) paintTeams(active && !pending);
     get("duel-skills").hidden = ended;
     get("duel-result").hidden = !ended;
     if (ended && (!ranked || ranking?.reason === "complete")) paintRewards();
@@ -318,6 +358,20 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     get("ranked-again").disabled = ranked && !ranking && !left;
     get("ranked-board").disabled = ranked && !ranking && !left;
     get("world").dataset.duelWinner = winner == null ? "" : String(winner);
+  }
+
+  function paintTeams(canTarget) {
+    const ally = snapshot?.fighters[allySide];
+    label(get("duel-ally-name"), roster[allySide].name);
+    label(get("duel-ally-hp"), ally?.hp === 0 ? "Knocked out" : `${ally?.hp ?? 100} HP${ally?.shield ? " +" + ally.shield + " shield" : ""}`);
+    for (const [index, button] of targetButtons.entries()) {
+      const slot = opponents[index];
+      const rival = snapshot?.fighters[slot];
+      label(button.querySelector("strong"), roster[slot].name);
+      label(button.querySelector("span"), rival?.hp === 0 ? "Knocked out" : `${rival?.hp ?? 100} HP`);
+      button.disabled = !canTarget || isOut(slot);
+      button.setAttribute("aria-pressed", String(slot === targetSide));
+    }
   }
 
   function paintRanking() {
@@ -361,21 +415,23 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       if (event.id <= lastEvent) continue;
       lastEvent = event.id;
       const from = battlePosition(event.side);
-      const to = battlePosition(1 - event.side);
+      const target = validSide(event.target) ? event.target : teamMode
+        ? (teamOf(event.side) === homeTeam ? targetSide : side) : 1 - event.side;
+      const to = battlePosition(target);
       const who = snapshot.fighters[event.side]?.hero;
       const impact = point(event) ? event : to;
       if (event.kind === "launch" && knownStyle(event.style) && point(event.destination)) {
         const source = point(event.origin) ? event.origin : from;
         if (event.side === side) player().playSpell(event.style, event.destination);
-        else map.playCast(event.style, event.destination);
+        else map.playCast(event.style, event.destination, event.side);
         map.pulse({ kind: "cast", side: event.side, hero: who, origin: source, target: source });
         sound.play(event.style);
       } else if (event.kind === "hit") {
         map.pulse({ kind: "strike", side: event.side, hero: who, origin: impact, target: impact });
-        const target = event.side === side ? "Rival" : "You";
+        const whoWasHit = target === side ? "You" : teamMode && teamOf(target) === homeTeam ? "Ally" : "Rival";
         const amount = Number.isFinite(event.amount) ? event.amount : 0;
         const pierced = Number.isFinite(event.pierced) && event.pierced > 0 ? ` ${event.pierced} shield pierced.` : "";
-        showStatus(amount ? `${target} lost ${amount} HP.${pierced}` : `${target === "You" ? "Your" : "Rival's"} ward caught the strike.`);
+        showStatus(amount ? `${whoWasHit} lost ${amount} HP.${pierced}` : `${whoWasHit === "You" ? "Your" : whoWasHit + "'s"} ward caught the strike.`);
         if (event.style !== "area") sound.play("impact");
       } else if (event.kind === "burst") {
         const radius = Number.isFinite(event.radius) && event.radius > 0 && event.radius <= 4 ? event.radius : 2.25;
@@ -383,23 +439,28 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
         sound.play("impact");
       } else if (event.kind === "dodge") {
         if (event.side === side) showStatus("Your rival dodged the spell.");
-        else {
+        else if (target === side) {
           map.pulse({ kind: "dodge", side, hero, origin: to, target: to });
           showStatus("Dodged!");
         }
       } else if (event.kind === "dash") {
         map.pulse({ kind: "dash", side: event.side, hero: who, target: from });
         if (event.side === side && clock >= dodgeReadyAt - dodgeCooldown + .27) player().dashToward(to.x, to.z);
+      } else if (event.kind === "combo") {
+        map.pulse({ kind: "strike", side: event.side, hero: who, origin: to, target: to });
+        if (teamOf(event.side) === homeTeam) showStatus(`Team combo! +${event.amount} damage.`);
       } else if (["burn", "heal", "shield", "evade", "haste", "cleanse"].includes(event.kind)) {
-        const position = event.kind === "burn" ? to : from;
+        const helped = ["heal", "shield", "haste", "cleanse"].includes(event.kind);
+        const position = event.kind === "burn" || (helped && validSide(event.target)) ? to : from;
         map.pulse({
           kind: event.kind === "evade" ? "dodge" : event.kind,
           side: event.side, hero: who, origin: position, target: position,
         });
       } else if ((event.kind === "miss" || event.kind === "timeout") && event.side === side) {
         showStatus(event.kind === "miss" ? "Incorrect answer. The skill is cooling down." : "Time ran out. The skill is cooling down.");
-      } else if (event.kind === "cast" && event.side !== side) {
-        showStatus(`${displayName(enemy)} is preparing a skill.`);
+        if (teamMode && helped && target === side && event.side !== side) showStatus("Your teammate supported you.");
+      } else if (event.kind === "cast" && teamOf(event.side) !== homeTeam) {
+        showStatus(`${displayName(who ?? enemy)} is preparing a skill.`);
       } else if (event.kind === "victory") {
         sound.play("complete");
       }
@@ -442,7 +503,12 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       snapshot = combat.read(side);
     }
     settle();
-    map.setRival({ ...other, hero: enemy });
+    if (teamMode) {
+      for (const [slot, position] of positions.entries()) {
+        if (slot === side) continue;
+        map.setFighter(slot, { ...position, hero: roster[slot].hero, down: isOut(slot), targeted: targetSide === slot });
+      }
+    } else map.setRival({ ...other, hero: enemy });
     map.setReducedMotion(reduceMotion);
     map.setAttacks(left ? [] : snapshot?.attacks ?? []);
     animateEvents();
@@ -478,6 +544,8 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   spells.forEach((button, index) => button.addEventListener("click", () => use(index), { signal: flags.signal }));
   answers.forEach((button, index) => button.addEventListener("click", () => use(index), { signal: flags.signal }));
   dodgeButton.addEventListener("click", dodge, { signal: flags.signal });
+  if (teamMode) targetButtons.forEach((button, index) =>
+    button.addEventListener("click", () => selectTarget(opponents[index]), { signal: flags.signal }));
   if (ranked) {
     get("ranked-again").addEventListener("click", () => onRankedAction(true), { signal: flags.signal });
     get("ranked-board").addEventListener("click", () => onRankedAction(false), { signal: flags.signal });

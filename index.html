@@ -50,21 +50,31 @@
       <p class="quick-controls">WASD move <span>·</span> Drag to look <span>·</span> E interact <span>·</span> Space jump</p>
     </section>
     <section class="duel-hud" id="duel-hud" hidden aria-label="Duel controls">
-      <div class="duel-bars">
-        <div class="duel-life"><div><strong id="duel-you"></strong><span id="duel-you-hp"></span></div><meter id="duel-you-bar" min="0" max="100" value="100"></meter></div>
-        <div class="duel-battle-name" id="duel-battle-name">Duel</div>
-        <div class="duel-life rival"><div><strong id="duel-rival"></strong><span id="duel-rival-hp"></span></div><meter id="duel-rival-bar" min="0" max="100" value="100"></meter></div>
-      </div>
-      <p class="duel-log" id="duel-log" aria-live="polite"></p>
-      <aside class="duel-result" id="duel-result" hidden aria-live="polite">
-        <strong id="duel-reward"></strong>
-        <span id="duel-growth"></span>
-        <span id="ranked-result" hidden></span>
-        <div class="ranked-result-actions">
-          <button type="button" id="ranked-again" hidden>Find next match</button>
-          <button type="button" id="ranked-board" hidden>Leaderboard</button>
+      <div class="duel-top">
+        <div class="duel-bars">
+          <div class="duel-life"><div><strong id="duel-you"></strong><span id="duel-you-hp"></span></div><meter id="duel-you-bar" min="0" max="100" value="100"></meter></div>
+          <div class="duel-battle-name" id="duel-battle-name">Duel</div>
+          <div class="duel-life rival"><div><strong id="duel-rival"></strong><span id="duel-rival-hp"></span></div><meter id="duel-rival-bar" min="0" max="100" value="100"></meter></div>
+          <div class="duel-ally" id="duel-allies" hidden>
+            <span class="duel-team-role">Ally</span>
+            <strong id="duel-ally-name"></strong><span id="duel-ally-hp"></span>
+          </div>
+          <div class="duel-team-targets" id="duel-team-targets" role="group" aria-label="Choose attack target" hidden>
+            <button type="button" id="duel-foe-1" aria-pressed="false"><strong></strong><span></span></button>
+            <button type="button" id="duel-foe-2" aria-pressed="false"><strong></strong><span></span></button>
+          </div>
         </div>
-      </aside>
+        <p class="duel-log" id="duel-log" aria-live="polite"></p>
+        <aside class="duel-result" id="duel-result" hidden aria-live="polite">
+          <strong id="duel-reward"></strong>
+          <span id="duel-growth"></span>
+          <span id="ranked-result" hidden></span>
+          <div class="ranked-result-actions">
+            <button type="button" id="ranked-again" hidden>Find next match</button>
+            <button type="button" id="ranked-board" hidden>Leaderboard</button>
+          </div>
+        </aside>
+      </div>
       <div id="duel-question" class="duel-question" hidden>
         <div class="question-line"><strong id="duel-question-text"></strong><span id="duel-seconds"></span></div>
         <div class="answer-options" id="duel-answers">
@@ -102,7 +112,7 @@
       <header class="ranked-intro">
         <div>
           <h2 id="ranked-lobby-title">Ranked Arena</h2>
-          <p id="ranked-description">Find a rival on your maths route. Play for a place on its leaderboard.</p>
+          <p id="ranked-description">Play rivals on your maths route and climb its leaderboard.</p>
         </div>
         <span class="ranked-seal" aria-hidden="true">✦</span>
       </header>
@@ -110,6 +120,28 @@
         <span id="ranked-grade"></span>
         <strong id="ranked-profile"></strong>
       </div>
+      <div class="ranked-mode">
+        <label for="ranked-mode">Match type</label>
+        <select id="ranked-mode">
+          <option value="solo">1v1 · Solo</option>
+          <option value="duo">2v2 · Doubles</option>
+        </select>
+      </div>
+      <section class="ranked-party" id="ranked-party" aria-labelledby="ranked-party-title" hidden>
+        <h3 id="ranked-party-title">Play with a friend</h3>
+        <div class="ranked-party-share">
+          <button type="button" id="ranked-create-party">Create party</button>
+          <output id="ranked-party-code" aria-label="Your party code"></output>
+          <button type="button" id="ranked-copy-party" hidden>Copy code</button>
+          <button type="button" id="ranked-leave-party" hidden>Leave party</button>
+        </div>
+        <label for="ranked-party-input">Friend’s party code</label>
+        <div class="ranked-party-entry">
+          <input id="ranked-party-input" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters" maxlength="16">
+          <button type="button" id="ranked-join-party">Join party</button>
+        </div>
+        <p id="ranked-party-status" role="status" aria-live="polite"></p>
+      </section>
       <section class="ranked-standings" aria-labelledby="ranked-standings-title">
         <h3 id="ranked-standings-title">Leaderboard</h3>
         <ol id="ranked-leaderboard"></ol>

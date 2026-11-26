@@ -101,3 +101,44 @@ test("reduced motion keeps the area boundary and a readable shrinking countdown"
   arena.setAttacks([]);
   assert.equal(visibleHazards(root).length, 0);
 });
+
+test("doubles has four fixed starts and each remote fighter has an independent state", () => {
+  const starts = [
+    { x: -2.3, z: 5, yaw: 0 }, { x: 2.3, z: 5, yaw: 0 },
+    { x: 2.3, z: -5, yaw: Math.PI }, { x: -2.3, z: -5, yaw: Math.PI },
+  ];
+  starts.forEach((start, side) => {
+    const root = new THREE.Group();
+    const arena = createDuelArena(root, { side, teamMode: true });
+    assert.deepEqual(arena.spawn, start);
+    assert.equal(root.getObjectByName("Arena fighter " + side), undefined);
+    starts.forEach((remoteStart, remoteSide) => {
+      if (remoteSide === side) return;
+      const fighter = root.getObjectByName("Arena fighter " + remoteSide);
+      assert.deepEqual(fighter.position.toArray(), [remoteStart.x, 0, remoteStart.z]);
+      assert.equal(fighter.rotation.y, remoteStart.yaw);
+      const role = Math.floor(side / 2) === Math.floor(remoteSide / 2) ? "Ally beacon" : "Opponent beacon";
+      assert.ok(fighter.getObjectByName(role));
+    });
+  });
+
+  const root = new THREE.Group();
+  const arena = createDuelArena(root, { side: 0, teamMode: true, reduceMotion: true });
+  const ally = root.getObjectByName("Arena fighter 1");
+  const foeOne = root.getObjectByName("Arena fighter 2");
+  const foeTwo = root.getObjectByName("Arena fighter 3");
+  arena.setFighter(1, { x: 4, z: 4, hero: "ember", targeted: true });
+  arena.setFighter(2, { x: 1, z: -1, hero: "gale", targeted: true, down: false });
+  arena.setFighter(3, { x: -3, z: -3, down: true, targeted: true });
+  arena.playCast("wave", { x: 4, z: -4 }, 2);
+  arena.update(0.1, 0.1);
+  assert.ok(ally.position.x > 2.3 && ally.position.x < 4);
+  assert.ok(foeOne.position.z > -5 && foeOne.position.z < -1);
+  assert.ok(foeTwo.position.x < -2.3 && foeTwo.position.x > -3);
+  assert.equal(ally.getObjectByName("Selected target"), undefined);
+  assert.equal(foeOne.getObjectByName("Selected target").visible, true);
+  assert.equal(foeTwo.getObjectByName("Selected target").visible, false);
+  assert.equal(foeTwo.getObjectByName("Opponent beacon").visible, false);
+  assert.ok(foeTwo.children[0].rotation.z > 0.5);
+  assert.notEqual(foeOne.children[0].children[9].rotation.x, foeTwo.children[0].children[9].rotation.x);
+});
