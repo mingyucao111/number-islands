@@ -140,5 +140,29 @@ test("doubles has four fixed starts and each remote fighter has an independent s
   assert.equal(foeTwo.getObjectByName("Selected target").visible, false);
   assert.equal(foeTwo.getObjectByName("Opponent beacon").visible, false);
   assert.ok(foeTwo.children[0].rotation.z > 0.5);
-  assert.notEqual(foeOne.children[0].children[9].rotation.x, foeTwo.children[0].children[9].rotation.x);
+  assert.notEqual(foeOne.getObjectByName("Casting arm").rotation.x, foeTwo.getObjectByName("Casting arm").rotation.x);
+});
+
+test("new heroes have matched uniforms and remote faces take bounded appearance updates", () => {
+  const root = new THREE.Group();
+  const looks = [{ side: 1, hero: "tide", appearance: { skin: 0 } }, { side: 2, hero: "thorn" }, { side: 3, hero: "echo" }];
+  const arena = createDuelArena(root, { side: 0, teamMode: true, roster: looks });
+  const tide = root.getObjectByName("Arena fighter 1");
+  const thorn = root.getObjectByName("Arena fighter 2");
+  const echo = root.getObjectByName("Arena fighter 3");
+  const coat = fighter => fighter.getObjectByName("Guardian coat").material.color.getHex();
+  assert.equal(new Set([coat(tide), coat(thorn), coat(echo)]).size, 3);
+  const face = tide.getObjectByName("Guardian face");
+  const hand = tide.getObjectByName("Guardian hand");
+  assert.ok(face?.isGroup);
+  const before = hand.material.color.getHex();
+  arena.setFighter(1, { x: 4, z: 4, appearance: { skin: 6, hair: 6 } });
+  assert.notEqual(hand.material.color.getHex(), before);
+  const dark = hand.material.color.getHex();
+  for (let i = 0; i < 50; i++) arena.setFighter(1, { x: 4, z: 4, hero: "tide", appearance: { skin: 6, hair: 6 } });
+  assert.equal(tide.getObjectByName("Guardian face"), face);
+  assert.equal(hand.material.color.getHex(), dark);
+  arena.setFighter(1, { hero: "frost", appearance: { skin: 1000 } });
+  assert.notEqual(hand.material.color.getHex(), dark);
+  assert.equal(new Set([coat(tide), coat(thorn), coat(echo)]).size, 3);
 });

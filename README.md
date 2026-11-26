@@ -14,9 +14,9 @@ If you restored the lighthouse in the original single-chapter release, the new c
 
 ## Windstone Arena
 
-Walk to the hero stones on the right side of the pier. Use **E** or the touch interact button to choose Gale, Warden or Ember. Your outfit and spell kit follow that choice into the arena, and the choice is saved in this browser.
+Walk to the **Hero Mirror** on the right side of the pier, press **C**, or use **Hero & face** in the game HUD. Choose from seven heroes, drag the 3D portrait to view it from the side, and change face shape, skin tone, hair style and colour, eye shape and colour, brows, cheek marks and expression. Save to use the appearance in the adventure and arena. Each hero's saved face can be edited again, and ranked opponents can see the appearance you use.
 
-Gale can dash, hurry other spells and pierce a ward. Warden has shields, ember cleansing and warded healing. Ember can heal and leave a damage-over-time glow.
+Each hero has three base skills and a signature spell. Gale specialises in movement and recharge, Warden in shielding and cleansing, and Ember in healing and embers. Tide strips wards and delays skills, Thorn marks targets for follow-up damage, Echo uses ranged shots and helps an ally recharge, and Frost can chill a rival then shatter the chill for extra damage. Train available signature spells directly in the Hero Mirror.
 
 - **Practice:** Walk through the **Practice arena** arch to duel a computer opponent.
 - **Friend duel:** Use the **Friend duel** arch. One player creates and shares an invite link. The other opens it, creates a reply code and sends the code back. The host pastes the reply and both enter the same real-time arena. The host’s grade band determines the maths for both players. It uses a direct WebRTC data connection, so some network combinations cannot connect without a relay.

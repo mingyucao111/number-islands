@@ -1,11 +1,8 @@
 import * as THREE from "./vendor/three.module.min.js";
+import { APPEARANCE_FIELDS, HERO_PALETTES, SKIN_TONES, normalizeAppearance } from "./appearance.mjs";
+import { createFaceRig } from "./face-rig.mjs";
 
 const LIMIT = 12;
-const TEAM = Object.freeze({
-  gale: { robe: 0x2a796b, hood: 0x3f9784, cape: 0x398774, trim: 0xace2c5, light: 0xade9d1 },
-  warden: { robe: 0x84632b, hood: 0xa88543, cape: 0x91703e, trim: 0xf5cc76, light: 0xffdea0 },
-  ember: { robe: 0x943e37, hood: 0xb95a4d, cape: 0xa64c3f, trim: 0xffb789, light: 0xffae7d },
-});
 const LIFE = Object.freeze({
   strike: 0.44, shield: 0.87, heal: 1.00, burn: 0.66, dash: 0.52,
   burst: 0.55, dodge: 0.40, cast: 0.35, cleanse: 0.73, haste: 0.55, pierce: 0.48,
@@ -14,6 +11,10 @@ const SPELL = Object.freeze({
   gale: { edge: 0x166450, body: 0x38bd9e, core: 0xe0ffea },
   warden: { edge: 0x815415, body: 0xe6a83b, core: 0xfff2bd },
   ember: { edge: 0x942d20, body: 0xef6146, core: 0xffdec8 },
+  tide: { edge: 0x175e81, body: 0x37b0d8, core: 0xcafaff },
+  thorn: { edge: 0x465d23, body: 0x8bba42, core: 0xedffb2 },
+  echo: { edge: 0x68387d, body: 0xb17ada, core: 0xf4d3ff },
+  frost: { edge: 0x36599b, body: 0x85afe9, core: 0xe7f8ff },
 });
 const STYLES = new Set(["bolt", "wave", "area"]);
 const PHASES = new Set(["windup", "projectile", "telegraph"]);
@@ -271,7 +272,7 @@ function makeLandscape(host) {
   return sheet;
 }
 
-function makeFighter(host, hero, name, role) {
+function makeFighter(host, hero, appearance, name, role) {
   const group = new THREE.Group();
   const rig = new THREE.Group();
   group.name = name;
@@ -279,23 +280,28 @@ function makeFighter(host, hero, name, role) {
   host.add(group);
   const cloth = {
     robe: material(0xffffff),
-    hood: material(0xffffff),
+    scarf: material(0xffffff),
     cape: material(0xffffff, { side: THREE.DoubleSide }),
     trim: material(0xffffff, { metalness: 0.21, roughness: 0.55 }),
   };
-  const skin = material(0xd8ae84);
+  const skin = material(0xffffff);
   const dark = material(0x3b463b);
   const boots = material(0x594938);
-  const visor = material(0x303f37);
   const ball = new THREE.SphereGeometry(1, 12, 8);
   const block = new THREE.BoxGeometry();
   const round = new THREE.CapsuleGeometry(1, 1, 3, 9);
-  add(rig, new THREE.CylinderGeometry(0.24, 0.32, 0.53, 11), cloth.robe, [0, 1.02, 0.01], [1, 1, 0.74], true);
-  add(rig, ball, cloth.hood, [0, 1.54, 0.035], [0.274, 0.293, 0.249], true);
-  add(rig, ball, visor, [0, 1.53, -0.15], [0.21, 0.199, 0.123]);
-  add(rig, ball, skin, [0, 1.488, -0.226], [0.142, 0.119, 0.057]);
-  add(rig, ball, cloth.trim, [0, 1.635, -0.157], [0.207, 0.046, 0.137]);
-  add(rig, ball, cloth.trim, [0, 1.308, -0.19], [0.068, 0.068, 0.038]);
+  const coat = add(rig, new THREE.CylinderGeometry(0.24, 0.32, 0.53, 11), cloth.robe, [0, 1.02, 0.01], [1, 1, 0.74], true);
+  coat.name = "Guardian coat";
+  add(rig, ball, cloth.scarf, [0, 1.248, 0.027], [0.242, 0.105, 0.211]);
+  add(rig, ball, cloth.trim, [0, 1.248, -0.187], [0.067, 0.064, 0.035]);
+  let equipped = typeof hero === "string" && Object.hasOwn(HERO_PALETTES, hero) ? hero : "warden";
+  let lastAppearance = appearance;
+  let look = normalizeAppearance(equipped, appearance);
+  const face = createFaceRig({ hero: equipped, appearance: look });
+  face.root.name = "Guardian face";
+  face.root.position.set(0, 1.565, 0.015);
+  face.root.scale.setScalar(0.91);
+  rig.add(face.root);
   add(rig, block, cloth.trim, [0, 0.885, -0.198], [0.178, 0.063, 0.059]);
 
   const capePath = new THREE.Shape();
@@ -319,11 +325,12 @@ function makeFighter(host, hero, name, role) {
     const arm = new THREE.Group();
     arm.position.set(side * 0.23, 1.225, 0.005);
     arm.rotation.z = side * 0.23;
+    if (side === 1) arm.name = "Casting arm";
     rig.add(arm);
     arms.push(arm);
     add(arm, ball, cloth.trim, [0, -0.055, 0], [0.112, 0.104, 0.098], true);
     add(arm, round, cloth.robe, [0, -0.215, 0], [0.073, 0.116, 0.076], true);
-    add(arm, ball, skin, [0, -0.417, -0.018], [0.057, 0.074, 0.071]);
+    add(arm, ball, skin, [0, -0.417, -0.018], [0.057, 0.074, 0.071]).name = "Guardian hand";
   }
   const halo = add(group, new THREE.RingGeometry(0.47, 0.502, 27).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false, transparent: true, opacity: 0.64 }), [0, 0.027, 0]);
@@ -337,7 +344,7 @@ function makeFighter(host, hero, name, role) {
     halo.scale.setScalar(1.22);
     beacon = add(group, role === "ally" ? new THREE.OctahedronGeometry(0.152)
       : new THREE.ConeGeometry(0.136, 0.24, 5).rotateZ(Math.PI),
-    new THREE.MeshBasicMaterial({ color: roleTint }), [0, 2.09, 0]);
+    new THREE.MeshBasicMaterial({ color: roleTint }), [0, 2.21, 0]);
     beacon.name = role === "ally" ? "Ally beacon" : "Opponent beacon";
     if (role === "opponent") {
       selection = new THREE.Group();
@@ -355,15 +362,33 @@ function makeFighter(host, hero, name, role) {
     }
   }
 
-  let equipped;
-  function dress(id) {
-    const heroId = typeof id === "string" && Object.hasOwn(TEAM, id) ? id : "warden";
-    if (heroId === equipped) return;
-    equipped = heroId;
-    for (const [key, part] of Object.entries(cloth)) part.color.setHex(TEAM[equipped][key]);
-    if (!role) halo.material.color.setHex(TEAM[equipped].light);
+  function paintCloth(hero) {
+    const palette = HERO_PALETTES[hero];
+    cloth.robe.color.setHex(palette.body);
+    cloth.scarf.color.setHex(palette.scarf);
+    cloth.cape.color.setHex(palette.cloth);
+    cloth.trim.color.setHex(palette.trim);
+    if (!role) halo.material.color.setHex(palette.scarf);
   }
-  dress(hero);
+
+  function dress(id, nextAppearance) {
+    const heroId = id === undefined ? equipped
+      : typeof id === "string" && Object.hasOwn(HERO_PALETTES, id) ? id : "warden";
+    const newHero = heroId !== equipped;
+    if (!newHero && (nextAppearance === undefined || nextAppearance === lastAppearance)) return;
+    const next = normalizeAppearance(heroId, nextAppearance);
+    lastAppearance = nextAppearance;
+    if (newHero) paintCloth(heroId);
+    if (newHero || APPEARANCE_FIELDS.some(({ id: field }) => look[field] !== next[field])) {
+      face.setAppearance(heroId, next);
+      skin.color.set(SKIN_TONES[next.skin]);
+      look = next;
+    }
+    equipped = heroId;
+  }
+
+  paintCloth(equipped);
+  skin.color.set(SKIN_TONES[look.skin]);
   return { group, rig, legs, arms, cape, dress, halo, beacon, selection };
 }
 
@@ -613,7 +638,7 @@ function sidePoint(side, teamMode) {
   return { x: 0, z: side === 1 ? -5 : 5, yaw: side === 1 ? Math.PI : 0 };
 }
 
-export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMotion = false, teamMode = false, roster = [] } = {}) {
+export function createDuelArena(root, { side = 0, rivalHero = "warden", rivalAppearance, reduceMotion = false, teamMode = false, roster = [] } = {}) {
   if (!root?.isObject3D) throw new TypeError("The duel arena requires a Three.js scene.");
   const sides = teamMode ? [0, 1, 2, 3] : [0, 1];
   const homeSide = sides.includes(side) ? side : 0;
@@ -632,9 +657,10 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
   for (const remoteSide of sides) {
     if (remoteSide === homeSide) continue;
     const point = sidePoint(remoteSide, teamMode);
-    const hero = (Array.isArray(roster) ? roster.find((entry) => entry?.side === remoteSide)?.hero : undefined) ?? rivalHero;
+    const entry = Array.isArray(roster) ? roster.find((item) => item?.side === remoteSide) : null;
     const role = teamMode ? (Math.floor(remoteSide / 2) === homeTeam ? "ally" : "opponent") : null;
-    const fighter = makeFighter(group, hero, teamMode ? "Arena fighter " + remoteSide : "Rival guardian", role);
+    const fighter = makeFighter(group, entry?.hero ?? rivalHero, entry?.appearance ?? rivalAppearance,
+      teamMode ? "Arena fighter " + remoteSide : "Rival guardian", role);
     fighter.group.position.set(point.x, 0, point.z);
     fighter.group.rotation.y = point.yaw;
     fighters.set(remoteSide, {
@@ -658,7 +684,7 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
     if (!fighter || !snapshot) return;
     const destination = legalPosition(snapshot);
     if (destination) fighter.target = destination;
-    if (snapshot.hero !== undefined) fighter.dress(snapshot.hero);
+    if (snapshot.hero !== undefined || snapshot.appearance !== undefined) fighter.dress(snapshot.hero, snapshot.appearance);
     fighter.requestedYaw = Number.isFinite(snapshot.yaw) ? snapshot.yaw : null;
     if (typeof snapshot.down === "boolean") fighter.down = snapshot.down;
     if (typeof snapshot.targeted === "boolean") fighter.targeted = snapshot.targeted;
@@ -677,7 +703,7 @@ export function createDuelArena(root, { side = 0, rivalHero = "warden", reduceMo
     const fighter = fighters.get(actor);
     const position = legalPosition(origin) ?? fighter?.group.position ?? spawn;
     const end = legalPosition(destination) ?? position;
-    const light = (typeof hero === "string" && Object.hasOwn(TEAM, hero) ? TEAM[hero] : TEAM.gale).light;
+    const light = (typeof hero === "string" && Object.hasOwn(HERO_PALETTES, hero) ? HERO_PALETTES[hero] : HERO_PALETTES.gale).scarf;
     const tint = kind === "heal" ? 0xcce89c : kind === "burn" ? 0xff9b6a
       : kind === "dodge" ? 0xd3fff5 : kind === "cleanse" ? 0xf1e2a4 : light;
     vfx.trigger(kind, tint, position, end, radius);

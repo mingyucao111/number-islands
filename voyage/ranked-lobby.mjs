@@ -113,7 +113,9 @@ export function createRankedLobby({ onEnter, onDismiss }) {
   }
 
   function queue(session) {
-    if (!send(session, { type: "queue", route: session.route.id, hero: session.hero, ...(session.mode === "duo" && { mode: "duo" }) })) return;
+    if (!send(session, { type: "queue", route: session.route.id, hero: session.hero,
+      ...(session.mode === "duo" && { mode: "duo" }),
+      ...(session.appearanceSupported && { appearance: session.appearance }) })) return;
     session.searching = true;
     session.joinedAt = Date.now();
     controls(session);
@@ -174,6 +176,7 @@ export function createRankedLobby({ onEnter, onDismiss }) {
         guestToken = message.token;
         saveToken(guestToken);
         session.ready = true;
+        session.appearanceSupported = message.appearanceVersion === 1;
         controls(session);
         status.textContent = "";
         requestBoard(session);
@@ -193,7 +196,7 @@ export function createRankedLobby({ onEnter, onDismiss }) {
         dialog.close();
         onEnter({
           kind: "ranked", side: message.side, matchId: message.matchId, mode: message.mode ?? "solo", roster: message.roster,
-          rivalHero: message.rivalHero, rivalName: message.rivalName,
+          rivalHero: message.rivalHero, rivalName: message.rivalName, rivalAppearance: message.rivalAppearance,
           send: (packet) => send(session, packet),
           listen(handler) { session.consumer = handler; },
           close() {
@@ -288,9 +291,9 @@ export function createRankedLobby({ onEnter, onDismiss }) {
 
   return {
     isOpen: () => dialog.open,
-    open(route, hero, again = false, mode = recentMode()) {
+    open(route, hero, again = false, mode = recentMode(), appearance) {
       if (dialog.open) return;
-      current = { route, hero, mode, joinOnReady: again };
+      current = { route, hero, appearance, mode, joinOnReady: again };
       modeSelect.value = mode;
       get("ranked-grade").textContent = route.grade;
       get("ranked-profile").textContent = "";

@@ -1,6 +1,6 @@
 /* Number Islands only caches public, same-origin game assets. */
 const CACHE_PREFIX = "number-islands-shell-";
-const CACHE_NAME = CACHE_PREFIX + "2026-11-26.5";
+const CACHE_NAME = CACHE_PREFIX + "2026-11-26.6";
 const BASE = new URL(self.registration.scope);
 const core = [
   "index.html", "expeditions.html", "islands.css", "storybook.css", "storybook-home.css", "islands.js", "agent.js",
@@ -8,6 +8,7 @@ const core = [
   "voyage/campaign.mjs", "voyage/waystones.mjs", "voyage/grove.mjs", "voyage/summit.mjs",
   "voyage/duel.css", "voyage/duel.mjs", "voyage/duel-lobby.mjs", "voyage/duel-link.mjs", "voyage/duel-arena.mjs", "voyage/combat-rules.mjs", "voyage/hero-growth.mjs",
   "voyage/ranked-lobby.mjs",
+  "voyage/appearance.mjs", "voyage/face-rig.mjs", "voyage/hero-gallery.mjs", "voyage/wardrobe.css",
   "voyage/world.mjs", "voyage/player.mjs", "voyage/mission.mjs", "voyage/vendor/three.module.min.js", "voyage/vendor/three.core.min.js",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "manifest.webmanifest", "icons/islands-192.png", "icons/islands-512.png", "icons/apple-touch-icon.png",

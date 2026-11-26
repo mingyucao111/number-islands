@@ -88,7 +88,7 @@ test("restoration sanitizes hero records and bounds the settlement history", () 
     },
     settled: [...Array.from({ length: 2000 }, (_, index) => "match-" + index), "match-1999", null, " "],
   });
-  assert.deepEqual(Object.keys(state.heroes), ["gale", "warden", "ember"]);
+  assert.deepEqual(Object.keys(state.heroes), ["gale", "warden", "ember", "tide", "thorn", "echo", "frost"]);
   assert.deepEqual(heroProgress(state, "gale"), {
     level: 1, xp: 7, coins: 0, signature: false, dodgeCooldown: 2.8, nextLevelXP: 55, canLearn: false,
   });

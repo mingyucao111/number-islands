@@ -6,6 +6,7 @@ const TEAM_CAST_RANGE = 13;
 const SUPPORT_RADIUS = 6.5;
 const COMBO_DAMAGE = 4;
 const COMBO_WINDOW = 3;
+const COOLDOWN_LIMIT = 14;
 const TIERS = Object.freeze([
   { damage: 10, cooldown: 2.5, window: 9, style: "bolt" },
   { damage: 20, cooldown: 5.5, window: 12, style: "wave" },
@@ -17,12 +18,17 @@ const PATHS = Object.freeze({
   area: Object.freeze({ duration: 1.25, radius: 2.25 }),
 });
 
+function freezeSkill({ path, impact, support, ...skill }) {
+  return Object.freeze({ ...skill, ...(path && { path: Object.freeze(path) }),
+    ...(impact && { impact: Object.freeze(impact) }), ...(support && { support: Object.freeze(support) }) });
+}
+
 function hero(id, name, color, spells, signature) {
-  const skills = spells.map(([skillName, effect, power, description], slot) => {
+  const skills = spells.map(([skillName, effect, power, description, settings], slot) => {
     const { damage, cooldown, window, style } = TIERS[slot];
-    return Object.freeze({ name: skillName, effect, power, description, damage, cooldown, window, style });
+    return freezeSkill({ name: skillName, effect, power, description, damage, cooldown, window, style, ...settings });
   });
-  skills.push(Object.freeze({ ...signature, path: Object.freeze(signature.path), window: 16 }));
+  skills.push(freezeSkill({ ...signature, window: 16 }));
   return Object.freeze({ id, name, color, skills: Object.freeze(skills) });
 }
 
@@ -48,6 +54,45 @@ export const HEROES = Object.freeze({
   ], { name: "Phoenix Bloom", effect: "rekindle", power: 4, damage: 29, cooldown: 12, style: "bolt",
     description: "Restore up to 10 health. A fast spark leaves embers for 4 seconds if it hits.",
     path: { speed: 13.5, windup: .20, radius: .56, endRadius: .56 } }),
+  tide: hero("tide", "Tide", "#66b4e8", [
+    ["Foam Lash", "wash", 0, "On hit, wash away up to 3 shield before dealing damage.", { impact: { strip: 3 } }],
+    ["Undertow", "undertow", 0, "On hit, add 1.25s to the enemy's longest active cooldown.", { impact: { delay: 1.25 } }],
+    ["Riptide", "riptide", 0, "On hit, remove up to 6 shield and add 1.75s to the longest active cooldown.",
+      { impact: { strip: 6, delay: 1.75 } }],
+  ], { name: "Maelstrom", effect: "maelstrom", damage: 29, cooldown: 12, style: "area",
+    description: "On hit, remove up to 8 shield and add 1s to every active enemy cooldown in the ring.",
+    impact: { strip: 8, delay: 1, delayAll: true }, path: { radius: 2.75, duration: 1.5 } }),
+  thorn: hero("thorn", "Thorn", "#a2c76e", [
+    ["Briar Pin", "briar", 0, "Mark the enemy for 5s. Your next hit in 1v1 or your teammate's next hit in 2v2 gains 5 damage.",
+      { impact: { mark: 5, markSeconds: 5 } }],
+    ["Bark Mantle", "bark", 0, "Gain 6 shield and give a teammate within 6.5m 3 shield before the wave launches.",
+      { support: { shield: 6 } }],
+    ["Bramble Snare", "bramble", 0, "Mark enemies hit for 5s. Your next hit in 1v1 or your teammate's next hit in 2v2 gains 8 damage.",
+      { impact: { mark: 8, markSeconds: 5 }, path: { radius: 2.45 } }],
+  ], { name: "Groveheart", effect: "grove", damage: 28, cooldown: 12.5, style: "area",
+    description: "Gain 9 shield and give a teammate within 6.5m 5 shield. Mark enemies hit for 6s. Your next hit in 1v1 or your teammate's next hit in 2v2 gains 8 damage.",
+    impact: { mark: 8, markSeconds: 6 }, support: { shield: 9 }, path: { radius: 2.7, duration: 1.55 } }),
+  echo: hero("echo", "Echo", "#bf9cf3", [
+    ["Resonance", "resonance", 0, "A fast bolt travels up to 17m and deals up to 3 damage through shields.",
+      { impact: { pierce: 3 }, path: { speed: 16, windup: .15, reach: 17, radius: .4, endRadius: .4 } }],
+    ["Refrain", "refrain", 0, "Shorten your other cooldowns by 1s and a teammate's by 2s within 6.5m. Wave travels up to 16m.",
+      { support: { recharge: 1, allyRecharge: 2 }, path: { speed: 9.5, reach: 16, radius: .78, endRadius: 1.13 } }],
+    ["Harmonic Ring", "harmonic", 0, "A tight ring deals up to 9 damage through shields, leaving those points intact.",
+      { impact: { pierce: 9 }, path: { radius: 2 } }],
+  ], { name: "Overtone", effect: "overtone", damage: 28, cooldown: 11.5, style: "bolt",
+    description: "Shorten your other cooldowns by 1.5s and a teammate's by 2.5s within 6.5m. A 17m bolt deals up to 5 damage through shields.",
+    impact: { pierce: 5 }, support: { recharge: 1.5, allyRecharge: 2.5 },
+    path: { speed: 15, windup: .17, reach: 17, radius: .49, endRadius: .49 } }),
+  frost: hero("frost", "Frost", "#9fe3ef", [
+    ["Chill Needle", "chill", 0, "Chill an enemy for 4s. The next skill they use while chilled takes 1.25s longer to recharge.",
+      { impact: { chillSeconds: 4, chillRecharge: 1.25 } }],
+    ["Shatter Wave", "shatter", 0, "Break up to 9 shield on hit. Consume active chill for 5 bonus damage.",
+      { impact: { strip: 9, shatter: 5 } }],
+    ["Whiteout", "whiteout", 0, "Chill enemies hit for 5s. Their next skill used while chilled takes 1.5s longer to recharge.",
+      { impact: { chillSeconds: 5, chillRecharge: 1.5 }, path: { radius: 2.45 } }],
+  ], { name: "Glacier Bell", effect: "glacier", damage: 30, cooldown: 12.5, style: "area",
+    description: "Break up to 12 shield and deal 7 extra damage to chilled targets. Apply fresh 4s chill that adds 1.25s to their next cooldown.",
+    impact: { strip: 12, shatter: 7, chillSeconds: 4, chillRecharge: 1.25 }, path: { radius: 2.65, duration: 1.55 } }),
 });
 
 const pretty = (value) => String(value).replace("-", "−");
@@ -166,7 +211,7 @@ function makeFighter(choice, fallback, side, signature, duo) {
   const { x, z } = combatSpawn(side, duo);
   const pose = { x, z };
   return { side, team: duo ? Math.floor(side / 2) : side, definition, signature, pose, sampled: pose,
-    hp: HEALTH, shield: 0, evasion: null, recentHit: null,
+    hp: HEALTH, shield: 0, evasion: null, recentHit: null, briar: null, chill: null,
     readyAt: [0, 0, 0, 0], pending: null, embers: [] };
 }
 
@@ -289,6 +334,8 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     for (const fighter of fighters) {
       fighter.pending = null;
       fighter.embers = [];
+      fighter.briar = null;
+      fighter.chill = null;
     }
     attacks.length = 0;
     emit(winner, "victory");
@@ -305,17 +352,37 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
 
   function damage(side, target, amount, effect, slot, geometry = null) {
     const opponent = fighters[target];
+    const skill = geometry ? fighters[side].definition.skills[slot] : null;
+    const rules = skill?.impact;
+    const activeMark = opponent.briar;
+    const marked = geometry && activeMark?.expires > time && fighters[activeMark.side].team === fighters[side].team
+      && (!duo || activeMark.side !== side);
+    const shatter = (opponent.chill?.expires > time && rules?.shatter) || 0;
     const previous = opponent.recentHit;
     const combo = duo && geometry && previous && previous.side !== side && previous.until >= time
       && fighters[previous.side].team === fighters[side].team;
-    let impact = amount + (combo ? COMBO_DAMAGE : 0);
+    let impact = amount + (combo ? COMBO_DAMAGE : 0) + (marked ? activeMark.amount : 0) + shatter;
+    if (marked) {
+      opponent.briar = null;
+      emit(side, "briar-hit", { target, slot, amount: activeMark.amount, effect, attackId: geometry.attackId });
+    }
+    if (shatter) {
+      opponent.chill = null;
+      emit(side, "shatter", { target, slot, amount: shatter, effect, attackId: geometry.attackId });
+    }
     if (geometry && opponent.evasion && opponent.evasion.expires > time) {
       const resisted = Math.floor(impact * opponent.evasion.reduction);
       impact -= resisted;
       opponent.evasion = null;
       emit(target, "evade", { target: side, amount: resisted, effect: "evade", attackId: geometry.attackId });
     }
-    const pierced = effect === "pierce" ? Math.min(opponent.shield, impact, fighters[side].definition.skills[slot].power) : 0;
+    if (rules?.strip && opponent.shield > 0) {
+      const removed = Math.min(opponent.shield, rules.strip);
+      opponent.shield -= removed;
+      emit(side, "strip", { target, slot, amount: removed, effect, attackId: geometry.attackId });
+    }
+    const bypass = effect === "pierce" ? skill?.power : rules?.pierce;
+    const pierced = Math.min(opponent.shield, impact, bypass ?? 0);
     const absorbed = Math.min(opponent.shield - pierced, impact - pierced);
     opponent.shield -= absorbed;
     const dealt = Math.min(opponent.hp, impact - absorbed);
@@ -375,23 +442,51 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     buffEvent(side, target, slot, "haste", amount);
   }
 
+  function affectTarget(side, target, slot, { effect, impact }, attackId) {
+    if (!impact) return;
+    const opponent = fighters[target];
+    const { delay, delayAll, mark, markSeconds, chillSeconds, chillRecharge } = impact;
+    if (delay) {
+      const { readyAt } = opponent;
+      const longest = readyAt.indexOf(Math.max(...readyAt));
+      let total = 0;
+      for (const [index, deadline] of readyAt.entries()) {
+        if (deadline <= time || (!delayAll && index !== longest)) continue;
+        const extended = Math.min(time + COOLDOWN_LIMIT, deadline + delay);
+        total += extended - deadline;
+        readyAt[index] = extended;
+      }
+      if (total > 0) emit(side, "delay", { target, slot, amount: total, effect, attackId });
+    }
+    if (mark) {
+      opponent.briar = { side, amount: mark, expires: time + markSeconds };
+      emit(side, "briar", { target, slot, amount: mark, seconds: markSeconds, effect, attackId });
+    }
+    if (chillSeconds) {
+      opponent.chill = { side, slot, effect, recharge: chillRecharge, expires: time + chillSeconds };
+      emit(side, "chill", { target, slot, amount: chillRecharge, seconds: chillSeconds, effect, attackId });
+    }
+  }
+
   function activate(side, target, slot, skill) {
     const { effect, power } = skill;
     const { team, pose } = fighters[side];
     const ally = duo && fighters.find((fighter) => fighter.side !== side && fighter.team === team && living(fighter)
       && Math.hypot(fighter.pose.x - pose.x, fighter.pose.z - pose.z) <= SUPPORT_RADIUS);
-    const guard = () => {
-      shield(side, side, power, slot);
-      if (ally) shield(side, ally.side, Math.ceil(power / 2), slot);
+    const guard = (amount = power) => {
+      shield(side, side, amount, slot);
+      if (ally) shield(side, ally.side, Math.ceil(amount / 2), slot);
     };
     const restore = (amount) => {
       heal(side, side, amount, slot);
       if (ally) heal(side, ally.side, Math.ceil(amount / 2), slot);
     };
-    const quicken = () => {
-      hasten(side, side, slot, power);
-      if (ally) hasten(side, ally.side, slot, power / 2);
+    const quicken = (amount = power, share = amount / 2) => {
+      hasten(side, side, slot, amount);
+      if (ally) hasten(side, ally.side, slot, share);
     };
+    if (skill.support?.shield) guard(skill.support.shield);
+    if (skill.support?.recharge) quicken(skill.support.recharge, skill.support.allyRecharge);
     switch (effect) {
       case "shield":
         guard();
@@ -476,7 +571,9 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     for (const target of targets) {
       if (duo && !living(fighters[target])) continue;
       const impact = damage(side, target, skill.damage, skill.effect, slot, geometry);
-      if (impact > 0 && ["burn", "heal-burn", "rekindle"].includes(skill.effect) && living(fighters[target])) {
+      if (!living(fighters[target])) continue;
+      affectTarget(side, target, slot, skill, id);
+      if (impact > 0 && ["burn", "heal-burn", "rekindle"].includes(skill.effect)) {
         fighters[target].embers.push({ side, slot, amount: skill.power, next: time + 1,
           left: skill.effect === "rekindle" ? 4 : 3 });
       }
@@ -501,7 +598,14 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
     const { slot, target } = fighter.pending;
     const skill = fighter.definition.skills[slot];
     fighter.pending = null;
-    fighter.readyAt[slot] = time + skill.cooldown;
+    const chill = fighter.chill;
+    const delay = chill?.expires > time ? chill.recharge : 0;
+    const cooldown = Math.min(COOLDOWN_LIMIT, skill.cooldown + delay);
+    fighter.readyAt[slot] = time + cooldown;
+    if (delay > 0) {
+      chill.recharge = 0;
+      emit(chill.side, "delay", { target: side, slot: chill.slot, amount: cooldown - skill.cooldown, effect: chill.effect });
+    }
     if (!correct) {
       emit(side, timedOut ? "timeout" : "miss", { slot, effect: skill.effect, ...(duo && { target }) });
       return;
@@ -534,6 +638,8 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
       }
       fighter.pending = null;
       fighter.embers = [];
+      fighter.briar = null;
+      fighter.chill = null;
     }
     for (let index = attacks.length - 1; index >= 0; index--) {
       if (!living(fighters[attacks[index].side])) attacks.splice(index, 1);
@@ -591,7 +697,9 @@ export function createCombat({ heroes = ["gale", "ember"], route = "p12", random
         shield: fighter.shield,
         signature: fighter.signature,
         ...(duo && { team: fighter.team }),
-        cooldowns: Object.freeze(fighter.readyAt.map((readyAt) => Math.max(0, readyAt - time))),
+        cooldowns: Object.freeze(fighter.readyAt.map((readyAt) => Math.min(COOLDOWN_LIMIT, Math.max(0, readyAt - time)))),
+        ...(fighter.briar?.expires > time && { briarSeconds: fighter.briar.expires - time }),
+        ...(fighter.chill?.expires > time && { chillSeconds: fighter.chill.expires - time }),
       }))),
       pending: privatePending ? Object.freeze({
         slot: privatePending.slot,

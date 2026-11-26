@@ -4,6 +4,7 @@ import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket } from "ws";
 import { createRankedServer } from "../server/ranked-server.mjs";
+import { normalizeAppearance } from "../voyage/appearance.mjs";
 
 const SITE = "https://mingyucao111.github.io";
 
@@ -71,6 +72,26 @@ async function paired(left, right, route = "k") {
   assert.equal(rightMatch.side, 1);
   return leftMatch.matchId;
 }
+
+test("ranked accepts the new heroes and shares only bounded facial appearance with opponents", async (t) => {
+  const { guest } = await fixture(t);
+  const left = await guest();
+  const right = await guest();
+  assert.equal(left.ready.appearanceVersion, 1);
+  const look = { face: 3, skin: 5, eyeColor: 6, hair: -1, brows: "bogus", privateName: "discard" };
+  left.send({ type: "queue", route: "k", hero: "frost", appearance: look });
+  await left.take("queued");
+  await join(right, "k", "tide"); // older client sends no appearance
+  const [a, b] = await Promise.all([left.take("match"), right.take("match")]);
+  assert.equal(a.matchId, b.matchId);
+  assert.equal(a.rivalHero, "tide");
+  assert.equal(a.rivalAppearance, undefined);
+  assert.equal(b.rivalHero, "frost");
+  assert.deepEqual(b.rivalAppearance, normalizeAppearance("frost", look));
+  assert.equal(b.rivalAppearance.privateName, undefined);
+  const { state } = await left.take("state");
+  assert.deepEqual(state.fighters.map(({ hero }) => hero), ["frost", "tide"]);
+});
 
 async function spell(client, slot, { side = 0, target } = {}) {
   const latestCast = (sample) => sample.events.findLast((event) => event.kind === "cast"

@@ -8,6 +8,7 @@
   <title>Number Islands · The Last Light</title>
   <link rel="stylesheet" href="voyage/voyage.css">
   <link rel="stylesheet" href="voyage/duel.css">
+  <link rel="stylesheet" href="voyage/wardrobe.css">
   <link rel="icon" href="icons/islands-192.png" type="image/png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -35,6 +36,7 @@
         <span id="rank-name"></span><span class="rank-xp" id="rank-xp"></span>
         <span id="skills"></span>
         <span id="hero-rank"></span>
+        <button type="button" id="gallery-open" aria-haspopup="dialog" aria-controls="hero-gallery">Hero &amp; face</button>
       </div>
       <p id="carry-status" class="carry-status" hidden></p>
       <p id="notice" class="notice" aria-live="polite" hidden></p>
@@ -153,6 +155,43 @@
         <button type="button" id="ranked-cancel" hidden>Cancel search</button>
         <button type="button" id="ranked-close">Return to island</button>
       </div>
+    </dialog>
+    <dialog class="hero-gallery" id="hero-gallery" aria-labelledby="hero-gallery-title">
+      <header class="gallery-top">
+        <h2 id="hero-gallery-title">Hero Gallery</h2>
+        <button type="button" id="gallery-close">Return to island</button>
+      </header>
+      <div id="gallery-heroes" class="gallery-heroes" role="group" aria-label="Choose a hero"></div>
+      <div class="gallery-body">
+        <section class="gallery-portrait" aria-labelledby="gallery-name">
+          <div class="gallery-preview-frame">
+            <canvas id="gallery-preview" aria-label="Live 3D hero portrait" aria-keyshortcuts="ArrowLeft ArrowRight" role="img" tabindex="0"></canvas>
+            <div class="gallery-identity">
+              <p id="gallery-role"></p>
+              <h3 id="gallery-name"></h3>
+            </div>
+          </div>
+          <p id="gallery-info" class="gallery-info"></p>
+        </section>
+        <section class="gallery-face" aria-labelledby="gallery-face-title">
+          <div class="gallery-section-heading">
+            <h3 id="gallery-face-title">Appearance</h3>
+            <button type="button" id="gallery-reset">Default face</button>
+          </div>
+          <div id="gallery-face-fields"></div>
+        </section>
+        <section class="gallery-moves" aria-labelledby="gallery-skills-title">
+          <div class="gallery-section-heading">
+            <h3 id="gallery-skills-title">Skills</h3>
+            <button type="button" id="gallery-train" hidden>Learn signature spell</button>
+          </div>
+          <ul id="gallery-skills"></ul>
+        </section>
+      </div>
+      <footer class="gallery-actions">
+        <p id="gallery-status" role="status" aria-live="polite"></p>
+        <button type="button" id="gallery-save">Save appearance</button>
+      </footer>
     </dialog>
     <div id="chapter-banner" class="chapter-banner" aria-live="polite" hidden><p></p><h1></h1><span></span></div>
     <div id="paused" class="paused" hidden>Voyage paused <span>Press Esc to continue</span></div>

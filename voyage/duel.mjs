@@ -1,4 +1,5 @@
 import { HEROES, combatSpawn, createCombat } from "./combat-rules.mjs";
+import { normalizeAppearance } from "./appearance.mjs";
 import { createDuelArena } from "./duel-arena.mjs";
 import { SIGNATURE_LEVEL, SIGNATURE_PRICE } from "./hero-growth.mjs";
 import { ROUTES } from "./progression.mjs";
@@ -13,8 +14,20 @@ const effectNames = Object.freeze({
   evade: "Dash", haste: "Recharge", pierce: "Pierce shield", shield: "Shield",
   "cleanse-shield": "Cleanse / shield", "shield-heal": "Shield / heal", heal: "Heal", burn: "Ember damage", "heal-burn": "Heal / embers",
   "dash-haste": "Dash / recharge", "shield-cleanse": "Shield / cleanse", rekindle: "Heal / embers",
+  wash: "Remove ward", undertow: "Delay skills", riptide: "Break ward / delay", maelstrom: "Heavy ward break",
+  briar: "Mark rival", bark: "Guard / mark", bramble: "Heavy mark", grove: "Team guard / mark",
+  resonance: "Long reach", refrain: "Recharge ally", harmonic: "Pierce ward", overtone: "Team recharge",
+  chill: "Chill", shatter: "Shatter chilled rival", whiteout: "Chill / delay", glacier: "Shatter / delay",
 });
 const styleNames = Object.freeze({ bolt: "Bolt", wave: "Wave", area: "Area" });
+const effectsOnHit = {
+  strip: ["strike", "Ward broken"],
+  delay: ["cast", "Recharge slowed"],
+  briar: ["cleanse", "Briar mark applied"],
+  "briar-hit": ["strike", "Briar follow-up"],
+  chill: ["shield", "Chilled"],
+  shatter: ["strike", "Ice shattered"],
+};
 const knownStyle = (style) => typeof style === "string" && Object.hasOwn(styleNames, style);
 const tiers = ["Easy", "Medium", "Hard", "Signature"];
 const exitRadius = 1.55;
@@ -58,7 +71,7 @@ function label(element, value) {
   if (element.textContent !== value) element.textContent = value;
 }
 
-export function createArenaDuel(root, { route, hero, progress, connection, player, sound, onExit, onRankedAction, onComplete }) {
+export function createArenaDuel(root, { route, hero, appearance, progress, connection, player, sound, onExit, onRankedAction, onComplete }) {
   const solo = !connection;
   const ranked = connection?.kind === "ranked";
   const teamMode = ranked && connection.mode === "duo";
@@ -70,13 +83,15 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
   const opponents = teamMode ? (homeTeam === 0 ? [2, 3] : [0, 1]) : [1 - side];
   const remoteSide = opponents[0];
   const allySide = side ^ 1;
-  const roster = teamMode ? connection.roster.map((entry, slot) => ({ ...entry, side: slot })) : [];
+  const roster = teamMode ? connection.roster.map((entry, slot) => ({ ...entry, side: slot,
+    appearance: normalizeAppearance(entry.hero, entry.appearance) })) : [];
   const positions = Array.from({ length: size }, (_, slot) => combatSpawn(slot, teamMode));
   const other = positions[remoteSide];
   let targetSide = teamMode ? 3 - side : remoteSide;
   let enemy = teamMode ? roster[targetSide].hero
     : ranked ? connection.rivalHero : hero === "warden" ? "ember" : "warden";
-  const map = createDuelArena(root, { side, rivalHero: enemy, teamMode, roster });
+  let rivalAppearance = ranked && !teamMode ? normalizeAppearance(enemy, connection.rivalAppearance) : undefined;
+  const map = createDuelArena(root, { side, rivalHero: enemy, rivalAppearance, teamMode, roster });
   const exit = { x: 0, y: 0, z: homeTeam === 0 ? 10 : -10 };
   const signature = !ranked && progress.signature;
   const dodgeCooldown = ranked ? 2.8 : progress.dodgeCooldown;
@@ -166,13 +181,14 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       player().setEnabled(true);
       settle();
       paint();
-    } else if (!ranked && message.type === "hello" && knownHero(message.hero)) {
-      if (message.version !== matchVersion || typeof message.signature !== "boolean") {
+    } else if (!ranked && message.type === "hello") {
+      if (message.version !== matchVersion || typeof message.signature !== "boolean" || !knownHero(message.hero)) {
         versionMismatch = true;
         return;
       }
       if (combat || snapshot || versionMismatch) return;
       enemy = message.hero;
+      rivalAppearance = normalizeAppearance(enemy, message.appearance);
       if (side === 0) {
         combat = createCombat({ heroes: [hero, enemy], route, signatures: [signature, message.signature] });
         syncPose();
@@ -407,7 +423,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     const hp = data?.hp ?? 100;
     const shield = data?.shield ?? 0;
     get(`duel-${which}-bar`).value = hp;
-    label(get(`duel-${which}-hp`), `${hp} HP${shield ? " +" + shield + " shield" : ""}`);
+    const condition = data?.chillSeconds > 0 ? " ❄" : data?.briarSeconds > 0 ? " ✦" : "";
+    const status = get(`duel-${which}-hp`);
+    label(status, `${hp} HP${shield ? " +" + shield + " shield" : ""}${condition}`);
+    status.title = data?.chillSeconds > 0 ? "Chilled" : data?.briarSeconds > 0 ? "Marked by briars" : "";
   }
 
   function animateEvents() {
@@ -449,6 +468,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
       } else if (event.kind === "combo") {
         map.pulse({ kind: "strike", side: event.side, hero: who, origin: to, target: to });
         if (teamOf(event.side) === homeTeam) showStatus(`Team combo! +${event.amount} damage.`);
+      } else if (Object.hasOwn(effectsOnHit, event.kind)) {
+        const [kind, note] = effectsOnHit[event.kind];
+        map.pulse({ kind, side: event.side, hero: who, origin: to, target: to });
+        if (event.side === side || target === side) showStatus(note);
       } else if (["burn", "heal", "shield", "evade", "haste", "cleanse"].includes(event.kind)) {
         const helped = ["heal", "shield", "haste", "cleanse"].includes(event.kind);
         const position = event.kind === "burn" || (helped && validSide(event.target)) ? to : from;
@@ -456,9 +479,9 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
           kind: event.kind === "evade" ? "dodge" : event.kind,
           side: event.side, hero: who, origin: position, target: position,
         });
+        if (teamMode && helped && target === side && event.side !== side) showStatus("Your teammate supported you.");
       } else if ((event.kind === "miss" || event.kind === "timeout") && event.side === side) {
         showStatus(event.kind === "miss" ? "Incorrect answer. The skill is cooling down." : "Time ran out. The skill is cooling down.");
-        if (teamMode && helped && target === side && event.side !== side) showStatus("Your teammate supported you.");
       } else if (event.kind === "cast" && teamOf(event.side) !== homeTeam) {
         showStatus(`${displayName(who ?? enemy)} is preparing a skill.`);
       } else if (event.kind === "victory") {
@@ -506,9 +529,10 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     if (teamMode) {
       for (const [slot, position] of positions.entries()) {
         if (slot === side) continue;
-        map.setFighter(slot, { ...position, hero: roster[slot].hero, down: isOut(slot), targeted: targetSide === slot });
+        map.setFighter(slot, { ...position, hero: roster[slot].hero, appearance: roster[slot].appearance,
+          down: isOut(slot), targeted: targetSide === slot });
       }
-    } else map.setRival({ ...other, hero: enemy });
+    } else map.setRival({ ...other, hero: enemy, appearance: rivalAppearance });
     map.setReducedMotion(reduceMotion);
     map.setAttacks(left ? [] : snapshot?.attacks ?? []);
     animateEvents();
@@ -551,7 +575,7 @@ export function createArenaDuel(root, { route, hero, progress, connection, playe
     get("ranked-board").addEventListener("click", () => onRankedAction(false), { signal: flags.signal });
   }
   connection?.listen(handlePacket);
-  if (!ranked) connection?.send({ type: "hello", hero, signature, version: matchVersion });
+  if (!ranked) connection?.send({ type: "hello", hero, appearance, signature, version: matchVersion });
   ui.hidden = false;
   document.body.dataset.duel = "true";
   paint();

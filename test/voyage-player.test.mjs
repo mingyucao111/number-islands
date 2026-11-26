@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "../voyage/vendor/three.module.min.js";
 import { createPlayer } from "../voyage/player.mjs";
+import { defaultAppearance, SKIN_TONES } from "../voyage/appearance.mjs";
 
 function simulate(world, spawn = { x: 0, z: 2 }) {
   const scene = new THREE.Scene();
@@ -15,6 +16,7 @@ function simulate(world, spawn = { x: 0, z: 2 }) {
   const player = createPlayer({ scene, camera, canvas, world, spawn });
   return {
     player,
+    scene,
     press(code, on = true) {
       const event = new Event(on ? "keydown" : "keyup", { cancelable: true });
       Object.defineProperty(event, "code", { value: code });
@@ -25,6 +27,26 @@ function simulate(world, spawn = { x: 0, z: 2 }) {
     },
   };
 }
+
+test("player appearance survives reset and changes immediately with an explicit hero look", () => {
+  const { player, scene } = simulate({ canWalk: () => true, heightAt: () => 0 });
+  const head = () => scene.getObjectByName("Face skin");
+  const skin = (option) => new THREE.Color(SKIN_TONES[option]).getHex();
+  player.setAppearance({ skin: 6 });
+  assert.equal(head().material.color.getHex(), skin(6));
+  player.setHero("gale");
+  player.reset();
+  assert.equal(head().material.color.getHex(), skin(6));
+  player.setHero("tide");
+  assert.equal(head().material.color.getHex(), skin(defaultAppearance("tide").skin));
+  player.setHero("frost", { skin: 3 });
+  const selected = head();
+  assert.equal(selected.material.color.getHex(), skin(3));
+  let released = false;
+  selected.geometry.addEventListener("dispose", () => { released = true; });
+  player.dispose();
+  assert.ok(released);
+});
 
 test("jump cannot cross a locked gate and a region reset becomes the new starting point", () => {
   let gateOpen = false;

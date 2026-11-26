@@ -1,4 +1,6 @@
 import * as THREE from "./vendor/three.module.min.js";
+import { HERO_PALETTES, normalizeAppearance, SKIN_TONES } from "./appearance.mjs";
+import { createFaceRig } from "./face-rig.mjs";
 
 const WALK_SPEED = 4.25;
 const RUN_SPEED = 7.1;
@@ -33,8 +35,8 @@ function createExplorer() {
   const leather = fabric(0x76513b);
   const sole = fabric(0x352d2b);
   const trouser = fabric(0x44534d);
-  const face = fabric(0xe5b58a);
-  const eye = fabric(0x3a2d29);
+  let hero = "gale";
+  const hands = fabric(SKIN_TONES[normalizeAppearance(hero).skin]);
   const brass = new THREE.MeshStandardMaterial({ color: 0xf2c36a, roughness: 0.42, metalness: 0.34 });
   const headShape = new THREE.SphereGeometry(1, 14, 10);
   const limbShape = new THREE.CapsuleGeometry(1, 1, 4, 12);
@@ -60,14 +62,10 @@ function createExplorer() {
   mesh(model, belt, leather, [0, 0.91, 0.007], [1, 1, 0.76]);
   mesh(model, cube, brass, [0.02, 0.91, -0.208], [0.084, 0.067, 0.027], false);
   mesh(model, headShape, linen, [0, 1.32, -0.065], [0.194, 0.094, 0.191]);
-  mesh(model, headShape, hoodMaterial, [0, 1.54, 0.036], [0.278, 0.3, 0.264]);
-  mesh(model, headShape, leaf, [0, 1.515, -0.114], [0.228, 0.232, 0.14]);
-  mesh(model, headShape, face, [0, 1.501, -0.178], [0.176, 0.184, 0.111]);
-  mesh(model, headShape, face, [0, 1.482, -0.279], [0.035, 0.035, 0.038], false);
-  for (const side of [-1, 1]) {
-    mesh(model, headShape, eye, [side * 0.067, 1.525, -0.279], [0.019, 0.022, 0.011], false);
-  }
-  mesh(model, headShape, leather, [0, 1.43, -0.277], [0.032, 0.011, 0.009], false);
+  const head = createFaceRig({ hero });
+  head.root.position.set(0, 1.57, 0.004);
+  head.root.scale.setScalar(.88);
+  model.add(head.root);
   const clasp = mesh(model, headShape, brass, [0.159, 1.32, -0.203], [0.043, 0.043, 0.019], false);
   clasp.rotation.z = -0.2;
 
@@ -100,7 +98,7 @@ function createExplorer() {
     arms.push(arm);
     mesh(arm, limbShape, leaf, [0, -0.16, 0], [0.088, 0.128, 0.091]);
     mesh(arm, limbShape, leather, [0, -0.304, 0], [0.076, 0.066, 0.079]);
-    mesh(arm, headShape, face, [0, -0.413, -0.019], [0.072, 0.083, 0.07]);
+    mesh(arm, headShape, hands, [0, -0.413, -0.019], [0.072, 0.083, 0.07]);
   }
 
   const capeMaterial = new THREE.MeshStandardMaterial({
@@ -129,23 +127,36 @@ function createExplorer() {
     mesh(charm, new THREE.TorusGeometry(.13, .026, 6, 14), charmMaterial, [0, 0, 0], [1, 1.4, 1], false),
     mesh(charm, new THREE.CylinderGeometry(.13, .13, .06, 6), charmMaterial, [0, 0, 0], [1, 1, 1], false),
     mesh(charm, new THREE.OctahedronGeometry(.13), charmMaterial, [0, 0, 0], [1, 1.6, 1], false),
+    mesh(charm, new THREE.TorusKnotGeometry(.084, .018, 36, 5), charmMaterial, [0, 0, 0], [1, 1, .74], false),
+    mesh(charm, new THREE.OctahedronGeometry(.105), charmMaterial, [0, 0, 0], [.71, 1.7, .52], false),
+    mesh(charm, new THREE.TorusGeometry(.110, .020, 6, 6), charmMaterial, [0, 0, 0], [1, 1, 1.15], false),
+    mesh(charm, new THREE.IcosahedronGeometry(.112, 0), charmMaterial, [0, 0, 0], [.90, 1.3, .84], false),
   ];
   ornaments[1].rotation.x = Math.PI / 2;
-  const outfits = {
-    gale: [0x285951, 0x5a9284, 0xcfe8b8, 0xdceda8, 0x538a7c],
-    warden: [0x695733, 0xaa854a, 0xffd177, 0xffd177, 0x8c713d],
-    ember: [0x8e403c, 0xc97055, 0xffd6b6, 0xffae81, 0xaa5a52],
-  };
+  ornaments[4].rotation.z = -.51;
+  ornaments[5].rotation.z = Math.PI / 6;
+  const outfitIds = Object.keys(HERO_PALETTES);
 
-  function setHero(id) {
-    const [body, hood, scarf, trim, cloth] = outfits[id] ?? outfits.gale;
+  function setAppearance(raw) {
+    const appearance = normalizeAppearance(hero, raw);
+    head.setAppearance(hero, appearance);
+    hands.color.set(SKIN_TONES[appearance.skin]);
+  }
+
+  function setHero(id, appearance) {
+    const next = Object.hasOwn(HERO_PALETTES, id) ? id : "gale";
+    if (next !== hero || appearance !== undefined) {
+      hero = next;
+      setAppearance(appearance);
+    }
+    const { body, hood, scarf, trim, cloth } = HERO_PALETTES[hero];
     leaf.color.setHex(body);
     hoodMaterial.color.setHex(hood);
     linen.color.setHex(scarf);
     charmMaterial.color.setHex(trim);
     charmMaterial.emissive.setHex(trim);
     charmMaterial.emissiveIntensity = .15;
-    const selected = id === "warden" ? 1 : id === "ember" ? 2 : 0;
+    const selected = outfitIds.indexOf(hero);
     ornaments.forEach((ornament, index) => { ornament.visible = index === selected; });
     const attribute = capeGeometry.attributes.color;
     const tint = new THREE.Color();
@@ -181,7 +192,7 @@ function createExplorer() {
 
   animateCape(0, 0, 0);
   setHero("gale");
-  return { root, model, arms, legs, cargo, animateCape, setHero };
+  return { root, model, arms, legs, cargo, animateCape, setHero, setAppearance, disposeHead: head.dispose };
 }
 
 function makeContactShadow() {
@@ -628,6 +639,7 @@ export function createPlayer({
     shadow.geometry.dispose();
     shadow.material.map.dispose();
     shadow.material.dispose();
+    explorer.disposeHead();
     const geometries = new Set();
     const materials = new Set();
     explorer.root.traverse((object) => {
@@ -640,6 +652,6 @@ export function createPlayer({
   }
 
   reset();
-  return { position, setCarried, setWindGlide, setWindLift, setEnabled, setHero: explorer.setHero,
+  return { position, setCarried, setWindGlide, setWindLift, setEnabled, setHero: explorer.setHero, setAppearance: explorer.setAppearance,
     dashToward, dodge, playSpell, takeInteract, takeRecovery, checkpoint, update, reset, dispose };
 }

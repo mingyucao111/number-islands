@@ -10,8 +10,8 @@ function attack(match, side, slot) {
 
 const lastEvent = (match, kind) => match.read().events.findLast((event) => event.kind === kind);
 
-test("three casters retain their shared tiers and gain distinctive signatures", () => {
-  assert.deepEqual(Object.keys(HEROES), ["gale", "warden", "ember"]);
+test("seven casters retain shared tiers and have distinctive signatures", () => {
+  assert.deepEqual(Object.keys(HEROES), ["gale", "warden", "ember", "tide", "thorn", "echo", "frost"]);
   for (const definition of Object.values(HEROES)) {
     assert.equal(definition.skills.length, 4);
     assert.deepEqual(definition.skills.slice(0, 3).map(({ damage }) => damage), [10, 20, 36]);
@@ -22,6 +22,10 @@ test("three casters retain their shared tiers and gain distinctive signatures", 
     ["evade", "haste", "pierce", "dash-haste"],
     ["shield", "cleanse-shield", "shield-heal", "shield-cleanse"],
     ["heal", "burn", "heal-burn", "rekindle"],
+    ["wash", "undertow", "riptide", "maelstrom"],
+    ["briar", "bark", "bramble", "grove"],
+    ["resonance", "refrain", "harmonic", "overtone"],
+    ["chill", "shatter", "whiteout", "glacier"],
   ]);
   const duel = createCombat({ signatures: [true, false] });
   assert.deepEqual(duel.read().fighters.map(({ signature }) => signature), [true, false]);
@@ -461,4 +465,178 @@ test("four active fighters cannot overflow the ranked snapshot or its projectile
   const snapshot = combat.read(3);
   assert.ok(snapshot.events.length <= 32);
   assert.ok(Buffer.byteLength(JSON.stringify({ type: "state", route: "s23", state: snapshot })) <= MAX_DUEL_PACKET_BYTES);
+});
+
+test("Tide erodes wards permanently and Undertow only slows the longest active recharge", () => {
+  const wash = createCombat({ heroes: ["tide", "warden"] });
+  attack(wash, 1, 2);
+  attack(wash, 0, 0);
+  wash.tick(1.1);
+  assert.equal(lastEvent(wash, "strip").amount, 3);
+  assert.equal(wash.read().fighters[1].shield, 0);
+  assert.equal(wash.read().fighters[1].hp, 100);
+
+  const undertow = createCombat({ heroes: ["tide", "warden"] });
+  for (const slot of [1, 2]) {
+    assert.equal(undertow.cast(1, slot), true);
+    undertow.botAnswer(1, false);
+  }
+  attack(undertow, 0, 1);
+  undertow.tick(2);
+  assert.deepEqual(undertow.read().fighters[1].cooldowns, [0, 3.5, 9.25, 0]);
+  assert.equal(lastEvent(undertow, "delay").amount, 1.25);
+});
+
+test("Riptide strips ward and slows one cooldown, while Maelstrom delays every active cooldown", () => {
+  for (const [slot, strip, cooldowns] of [
+    [2, 6, [.5, 0, 9.75, 0]],
+    [3, 8, [1.5, 0, 9, 0]],
+  ]) {
+    const combat = createCombat({ heroes: ["tide", "warden"], signatures: [true, false] });
+    attack(combat, 1, 0);
+    attack(combat, 1, 2);
+    attack(combat, 0, slot);
+    combat.tick(2);
+    assert.equal(lastEvent(combat, "strip").amount, strip);
+    assert.deepEqual(combat.read().fighters[1].cooldowns, cooldowns);
+  }
+});
+
+test("Thorn's briars add damage once, with a distinct allied trigger in 2v2", () => {
+  const solo = createCombat({ heroes: ["thorn", "gale"] });
+  attack(solo, 0, 0);
+  solo.tick(1.1);
+  assert.ok(solo.read().fighters[1].briarSeconds > 0);
+  attack(solo, 0, 1);
+  assert.equal(solo.read().fighters[0].shield, 6);
+  solo.tick(2);
+  assert.equal(solo.read().fighters[1].hp, 65);
+  assert.equal(lastEvent(solo, "briar-hit").amount, 5);
+  assert.equal(solo.read().fighters[1].briarSeconds, undefined);
+
+  const team = createCombat({ heroes: ["thorn", "gale", "gale", "gale"] });
+  const strike = (side, slot) => {
+    assert.equal(team.cast(side, slot, 3), true);
+    team.botAnswer(side, true);
+  };
+  strike(0, 0);
+  team.tick(1.1);
+  strike(0, 1);
+  assert.equal(team.read().fighters[1].shield, 3);
+  team.tick(2);
+  assert.ok(team.read().fighters[3].briarSeconds > 0);
+  strike(1, 0);
+  team.tick(1.2);
+  assert.equal(team.read().fighters[3].briarSeconds, undefined);
+  assert.deepEqual([lastEvent(team, "briar-hit").side, lastEvent(team, "briar-hit").amount], [1, 5]);
+  assert.equal(team.read().fighters[2].hp, 100);
+});
+
+test("Bramble applies the stronger mark, while Grove also protects nearby allies", () => {
+  const combat = createCombat({ heroes: ["thorn", "gale", "gale", "gale"], signatures: [true] });
+  attack(combat, 0, 2);
+  combat.tick(1.3);
+  assert.equal(lastEvent(combat, "briar").amount, 8);
+  attack(combat, 0, 3);
+  assert.deepEqual(combat.read().fighters.map(({ shield }) => shield), [9, 5, 0, 0]);
+  combat.tick(1.6);
+  assert.ok(combat.read().fighters[3].briarSeconds > 5);
+  assert.equal(lastEvent(combat, "briar").slot, 3);
+});
+
+test("Echo's fast bolts reach farther and bypass ward without stripping the bypassed points", () => {
+  const ranged = createCombat({ heroes: ["echo", "warden"] });
+  ranged.setPose(0, { x: 0, z: 8 });
+  ranged.setPose(1, { x: 0, z: -8 });
+  attack(ranged, 1, 2);
+  attack(ranged, 0, 0);
+  ranged.tick(1.22);
+  assert.equal(ranged.read().fighters[1].hp, 97);
+  assert.equal(ranged.read().fighters[1].shield, 6);
+  assert.equal(lastEvent(ranged, "hit").pierced, 3);
+
+  const harmonic = createCombat({ heroes: ["echo", "warden"] });
+  attack(harmonic, 1, 2);
+  attack(harmonic, 0, 2);
+  harmonic.tick(1.3);
+  assert.equal(harmonic.read().fighters[1].shield, 9);
+  const struck = harmonic.read().events.find(({ kind, side }) => kind === "hit" && side === 0);
+  assert.equal(struck.effect, "harmonic");
+  assert.equal(struck.pierced, 9);
+
+  const overtone = createCombat({ heroes: ["echo", "warden"], signatures: [true] });
+  attack(overtone, 1, 2);
+  attack(overtone, 0, 3);
+  overtone.tick(1.15);
+  assert.equal(overtone.read().fighters[1].shield, 5);
+  assert.equal(lastEvent(overtone, "hit").pierced, 5);
+});
+
+test("Echo's Refrain and Overtone shorten nearby teammate cooldowns more than its own", () => {
+  const combat = createCombat({ heroes: ["echo", "gale", "warden", "gale"], signatures: [true] });
+  attack(combat, 0, 2);
+  attack(combat, 1, 2);
+  attack(combat, 0, 1);
+  assert.equal(combat.read().fighters[0].cooldowns[2], 9);
+  assert.equal(combat.read().fighters[1].cooldowns[2], 8);
+  attack(combat, 0, 3);
+  assert.equal(combat.read().fighters[0].cooldowns[2], 7.5);
+  assert.equal(combat.read().fighters[1].cooldowns[2], 5.5);
+  assert.equal(combat.read().fighters[0].cooldowns[3], 11.5);
+});
+
+test("Frost's chill modifies the next recharge once and Shatter consumes chill for bonus damage", () => {
+  const combat = createCombat({ heroes: ["frost", "warden"] });
+  attack(combat, 0, 0);
+  combat.tick(1.1);
+  assert.ok(combat.read().fighters[1].chillSeconds > 0);
+  attack(combat, 1, 2);
+  assert.equal(combat.read().fighters[1].cooldowns[2], 11.25);
+  attack(combat, 1, 0);
+  assert.equal(combat.read().fighters[1].cooldowns[0], 2.5);
+  attack(combat, 0, 1);
+  combat.tick(2);
+  assert.equal(combat.read().fighters[1].chillSeconds, undefined);
+  assert.equal(lastEvent(combat, "strip").amount, 9);
+  assert.equal(lastEvent(combat, "shatter").amount, 5);
+  assert.equal(combat.read().fighters[1].hp, 79);
+});
+
+test("Whiteout applies timed chill and Glacier shatters it before applying new chill", () => {
+  const combat = createCombat({ heroes: ["frost", "warden"], signatures: [true] });
+  attack(combat, 0, 2);
+  combat.tick(1.25);
+  assert.equal(combat.read().fighters[1].chillSeconds, 5);
+  attack(combat, 1, 2);
+  attack(combat, 1, 0);
+  assert.equal(combat.read().fighters[1].cooldowns[2], 11.5);
+  attack(combat, 0, 3);
+  combat.tick(1.6);
+  assert.equal(lastEvent(combat, "strip").amount, 12);
+  assert.equal(lastEvent(combat, "shatter").amount, 7);
+  assert.ok(combat.read().fighters[1].chillSeconds > 3.8);
+  assert.equal(combat.read().fighters[1].hp, 38);
+  combat.tick(4);
+  assert.equal(combat.read().fighters[1].chillSeconds, undefined);
+});
+
+test("status effects require impact and stacked cooldown delays stay within the wire limit", () => {
+  const dodge = createCombat({ heroes: ["frost", "thorn"] });
+  assert.equal(dodge.cast(0, 0), true);
+  dodge.botAnswer(0, false);
+  attack(dodge, 0, 2);
+  dodge.setPose(1, { x: 4, z: -5 });
+  dodge.tick(2);
+  assert.ok(lastEvent(dodge, "dodge"));
+  assert.equal(dodge.read().fighters[1].chillSeconds, undefined);
+
+  const team = createCombat({ heroes: ["tide", "tide", "warden", "gale"], signatures: [false, false, true] });
+  attack(team, 2, 3);
+  for (const side of [0, 1]) {
+    assert.equal(team.cast(side, 2, 2), true);
+    team.botAnswer(side, true);
+  }
+  team.tick(1.25);
+  assert.equal(team.read().fighters[2].cooldowns[3], 14);
+  assert.equal(team.read().fighters[2].cooldowns[1], 0);
 });

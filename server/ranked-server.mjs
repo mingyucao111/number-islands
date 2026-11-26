@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
 import { HEROES } from "../voyage/combat-rules.mjs";
+import { normalizeAppearance } from "../voyage/appearance.mjs";
 import { ROUTES } from "../voyage/progression.mjs";
 import { createRankedRoom } from "./ranked-room.mjs";
 import { createRankedStore, takeDuo, takePair } from "./ranked-rating.mjs";
@@ -98,11 +99,12 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     if (session.mode === "duo") {
       return { type: "match", matchId: session.id, route: session.route, mode: "duo",
         side: session.players.findIndex((player) => player.id === id),
-        roster: session.players.map(({ name, hero }) => ({ name, hero })) };
+        roster: session.players.map(({ name, hero, appearance }) => ({ name, hero, appearance })) };
     }
     const side = session.players[0].id === id ? 0 : 1;
     const rival = session.players[1 - side];
-    return { type: "match", matchId: session.id, route: session.route, side, rivalHero: rival.hero, rivalName: rival.name };
+    return { type: "match", matchId: session.id, route: session.route, side, rivalHero: rival.hero, rivalName: rival.name,
+      ...(rival.appearance && { rivalAppearance: rival.appearance }) };
   }
 
   function publishOutcome(result) {
@@ -226,7 +228,7 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
       const clients = pair.map(({ id }) => loggedIn.get(id));
       const id = randomUUID();
       const route = pair[0].route;
-      const players = pair.map(({ id: guest, name, hero }) => ({ id: guest, name, hero }));
+      const players = pair.map(({ id: guest, name, hero, appearance }) => ({ id: guest, name, hero, appearance }));
       const room = createRankedRoom({
         id, route, players, now: timestamp, onFinish: publishOutcome,
         send: (guest, packet) => send(loggedIn.get(guest), packet),
@@ -274,7 +276,7 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     client.guest = { id: guest.id, name: guest.name };
     clearTimeout(client.authTimer);
     loggedIn.set(guest.id, client);
-    send(client, { type: "ready", token, name: guest.name });
+    send(client, { type: "ready", token, name: guest.name, appearanceVersion: 1 });
     const party = memberships.get(guest.id);
     if (party) updateParty(party, timestamp);
     const session = activePlayer.get(guest.id);
@@ -333,6 +335,7 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
     if (loggedIn.get(id) !== client) return;
     const session = activePlayer.get(id);
     const hasMode = Object.hasOwn(packet, "mode");
+    const hasAppearance = Object.hasOwn(packet, "appearance");
     const mode = hasMode ? packet.mode : "solo";
     const validMode = mode === "solo" || mode === "duo";
     if (["party-create", "party-join", "party-leave"].includes(packet.type)) {
@@ -342,7 +345,8 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
       const route = packet.route;
       send(client, { type: "board", route, ...(hasMode && { mode }), profile: store.profile(id, route, mode),
         leaders: store.leaderboard(route, 20, mode) });
-    } else if (packet.type === "queue" && keysAre(packet, hasMode ? ["type", "route", "hero", "mode"] : ["type", "route", "hero"])
+    } else if (packet.type === "queue" && keysAre(packet, ["type", "route", "hero",
+      ...(hasMode ? ["mode"] : []), ...(hasAppearance ? ["appearance"] : [])])
       && validMode && GRADES.has(packet.route) && typeof packet.hero === "string" && Object.hasOwn(HEROES, packet.hero)) {
       if (session) {
         error(client, "in-match", "Finish the current duel before joining the queue.");
@@ -363,7 +367,9 @@ export function createRankedServer({ databasePath = ":memory:", origins, now = D
       }
       if (!prior || prior.route !== route || prior.hero !== hero || prior.mode !== mode) {
         if (prior) cancelQueue(id);
-        queue.set(id, { id, name, route, hero, mode, partyId: party?.code, rating: store.profile(id, route, mode).rating, joinedAt: timestamp });
+        const appearance = hasAppearance ? normalizeAppearance(hero, packet.appearance) : undefined;
+        queue.set(id, { id, name, route, hero, appearance, mode, partyId: party?.code,
+          rating: store.profile(id, route, mode).rating, joinedAt: timestamp });
       }
       send(client, { type: "queued", route, ...(hasMode && { mode }) });
       if (party) updateParty(party, timestamp);

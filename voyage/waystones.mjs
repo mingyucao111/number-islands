@@ -94,7 +94,7 @@ export function buildPassage(root, point, text, tint = 0xe0ba69) {
 
 export function buildHeroShrines(root, heroes, terrain) {
   const locations = [[4.4, 22], [7, 21.8], [9.6, 21]];
-  return Object.values(heroes).map((hero, index) => {
+  return [heroes.gale, heroes.warden, heroes.ember].map((hero, index) => {
     const [x, z] = locations[index];
     const y = terrain.heightAt(x, z);
     const point = { x, y, z };
@@ -112,4 +112,32 @@ export function buildHeroShrines(root, heroes, terrain) {
       symbol.material.emissiveIntensity = selected ? .58 : .16;
     } };
   });
+}
+
+export function buildHeroMirror(root, point) {
+  const mirror = new THREE.Group();
+  mirror.position.set(point.x, point.y, point.z);
+  stoneBase(mirror, { x: 0, y: 0, z: 0 });
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(.67, .072, 9, 42),
+    new THREE.MeshStandardMaterial({ color: 0xe8c58a, metalness: .3, roughness: .33 }));
+  frame.scale.y = 1.18;
+  frame.position.y = 1.34;
+  const surface = new THREE.Mesh(new THREE.CircleGeometry(.63, 42),
+    new THREE.MeshStandardMaterial({ color: 0x4d9e86, emissive: 0x3b7a69, emissiveIntensity: .48,
+      roughness: .27, metalness: .18, side: THREE.DoubleSide }));
+  surface.scale.y = 1.18;
+  surface.position.y = 1.34;
+  const spark = new THREE.Mesh(new THREE.OctahedronGeometry(.14),
+    new THREE.MeshStandardMaterial({ color: 0xe0f4bb, emissive: 0xb6eca0, emissiveIntensity: .53 }));
+  spark.position.set(0, 1.35, .18);
+  const label = makeLabel("Hero Mirror", 304);
+  label.position.y = 2.57;
+  mirror.add(frame, surface, spark, label);
+  root.add(mirror);
+  return {
+    update(time) {
+      spark.rotation.y = time * 1.1;
+      spark.position.y = 1.35 + Math.sin(time * 1.6) * .09;
+    },
+  };
 }

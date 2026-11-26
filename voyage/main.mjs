@@ -7,8 +7,10 @@ import { ROUTES, rankFor } from "./progression.mjs";
 import { CHAPTERS, campaignXP, chooseTrack, currentTrack, finishChapter, openCampaign, replayTrack, returnHome, travelSkills } from "./campaign.mjs";
 import { createGrove } from "./grove.mjs";
 import { createSummit } from "./summit.mjs";
-import { buildHeroShrines, buildPassage, buildWaystones } from "./waystones.mjs";
+import { buildHeroMirror, buildHeroShrines, buildPassage, buildWaystones } from "./waystones.mjs";
 import { HEROES } from "./combat-rules.mjs";
+import { normalizeAppearance } from "./appearance.mjs";
+import { createHeroGallery } from "./hero-gallery.mjs";
 import { awardDuel, heroProgress, learnSignature, openHeroGrowth, SIGNATURE_LEVEL, SIGNATURE_PRICE } from "./hero-growth.mjs";
 import { createArenaDuel } from "./duel.mjs";
 import { createDuelLobby } from "./duel-lobby.mjs";
@@ -17,6 +19,7 @@ import { createRankedLobby } from "./ranked-lobby.mjs";
 const SAVE = "number-islands-campaign-v1";
 const LEGACY_SAVE = "number-islands-last-light-v1";
 const HERO_SAVE = "number-islands-hero-v1";
+const APPEARANCE_SAVE = "number-islands-faces-v1";
 const GROWTH_SAVE = "number-islands-arena-growth-v1";
 const spawn = { x: 0, z: 24, yaw: 0 };
 const get = (id) => document.getElementById(id);
@@ -80,6 +83,7 @@ const replayBell = Object.freeze({ x: 3.4, y: 0, z: 20.1 });
 const practiceGate = Object.freeze({ x: 12.2, y: 0, z: 19.2 });
 const friendGate = Object.freeze({ x: 9.8, y: 0, z: 17 });
 const rankedGate = Object.freeze({ x: 6.5, y: 0, z: 16.8 });
+const heroMirror = Object.freeze({ x: 2.6, y: 0, z: 22.65 });
 
 function closeTo(position, point, radius) {
   return point && Math.abs(position.y - point.y) < 1.45
@@ -98,6 +102,7 @@ function createCoast(root, route, home, selectedHero) {
   const practice = buildPassage(root, practiceGate, "Practice arena", 0x83d8bc);
   const friends = buildPassage(root, friendGate, "Friend duel", 0xf3ba92);
   const ranked = buildPassage(root, rankedGate, "Ranked Arena", 0xd2b9fa);
+  const mirror = buildHeroMirror(root, heroMirror);
   const shrines = buildHeroShrines(root, HEROES, world);
   const bell = home ? buildPassage(root, replayBell, "Voyage bell") : null;
   if (home) quest.restoreComplete();
@@ -118,6 +123,7 @@ function createCoast(root, route, home, selectedHero) {
       practice.update(time);
       friends.update(time);
       ranked.update(time);
+      mirror.update(time);
       stones.forEach((stone) => stone.update(time, stone.id === route.id));
       shrines.forEach((shrine) => shrine.update(time, shrine.hero.id === selectedHero()));
     },
@@ -172,6 +178,8 @@ export function startVoyage() {
   let player;
   const storedHero = readSaved(HERO_SAVE);
   let selectedHero = typeof storedHero === "string" && Object.hasOwn(HEROES, storedHero) ? storedHero : "gale";
+  const storedFaces = readSaved(APPEARANCE_SAVE);
+  const appearances = Object.fromEntries(Object.keys(HEROES).map((id) => [id, normalizeAppearance(id, storedFaces?.[id])]));
   let growth = openHeroGrowth(readSaved(GROWTH_SAVE));
   let duel;
   let arenaGroup;
@@ -198,6 +206,29 @@ export function startVoyage() {
   const rankedLobby = createRankedLobby({ onEnter: enterDuel, onDismiss() {
     if (!duel) player?.setEnabled(!paused);
   } });
+  const gallery = createHeroGallery({
+    appearanceFor: (id) => appearances[id],
+    heroProgress: (id) => heroProgress(growth, id),
+    onSave(id, appearance) {
+      appearances[id] = normalizeAppearance(id, appearance);
+      const prior = readSaved(APPEARANCE_SAVE);
+      try { localStorage.setItem(APPEARANCE_SAVE, JSON.stringify({ ...prior, [id]: appearances[id] })); } catch { /* keep this session's face */ }
+      selectHero(id);
+      announce(`${HEROES[id].name} · Appearance saved`);
+    },
+    async onTrain(id) {
+      const { state } = await updateHeroGrowth((current) => ({ state: learnSignature(current, id) }));
+      if (!heroProgress(state, id).signature) return false;
+      sound.play("complete");
+      return true;
+    },
+    onDismiss() {
+      if (!lobby.isOpen() && !rankedLobby.isOpen()) {
+        player?.setEnabled(!paused && !duel);
+        canvas.focus({ preventScroll: true });
+      }
+    },
+  });
 
   function currentRoute() { return ROUTES.find(({ id }) => id === campaign.chosen) ?? ROUTES[0]; }
 
@@ -221,6 +252,15 @@ export function startVoyage() {
   function refreshHeroRank() {
     const { level, coins } = heroProgress(growth, selectedHero);
     get("hero-rank").textContent = `${HEROES[selectedHero].name} · Lv ${level} · ${coins} gold`;
+  }
+
+  function selectHero(id) {
+    selectedHero = id;
+    try { localStorage.setItem(HERO_SAVE, JSON.stringify(id)); } catch { /* chosen for this session */ }
+    player.setHero(id, appearances[id]);
+    canvas.dataset.hero = id;
+    refreshHeroRank();
+    sound.play("advance");
   }
 
   function resize() {
@@ -275,7 +315,7 @@ export function startVoyage() {
     const arrival = complete ? (region.completedSpawn ?? { x: 0, z: -9, yaw: 0 }) : region.spawn;
     if (!player) player = createPlayer({ scene, camera, canvas, world: terrain, spawn: arrival });
     else player.reset(arrival);
-    player.setHero(selectedHero);
+    player.setHero(selectedHero, appearances[selectedHero]);
     refreshGrowth();
     canvas.dataset.region = CHAPTERS[index].id;
     canvas.dataset.route = route.id;
@@ -290,7 +330,7 @@ export function startVoyage() {
     canvas.focus({ preventScroll: true });
     showBanner(home ? "Homecoming" : "The Last Light", CHAPTERS[index].title,
       home ? "The ships are safe. Another voyage waits by the pier." : route.name);
-    if (index === 0 && !home) announce("Route stones to the left. Heroes and the arena to the right.", 5200);
+    if (index === 0 && !home) announce("Route stones to the left. Hero Mirror and arenas to the right.", 5200);
     refreshHud(performance.now());
   }
 
@@ -308,6 +348,7 @@ export function startVoyage() {
 
   function pierAction(position) {
     if (index !== 0 || region.state.carried) return null;
+    if (closeTo(position, heroMirror, 1.28)) return { type: "gallery", label: "Open the Hero Mirror", loc: heroMirror };
     const hero = region.shrines.find(({ point }) => closeTo(position, point, 1.16));
     if (hero) {
       const { id, name, skills } = hero.hero;
@@ -346,7 +387,7 @@ export function startVoyage() {
     scene.add(arenaGroup);
     const hero = selectedHero;
     const matchId = connection?.matchId ?? Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(36)).join("-");
-    duel = createArenaDuel(arenaGroup, { route: route.id, hero, progress: heroProgress(growth, hero), connection,
+    duel = createArenaDuel(arenaGroup, { route: route.id, hero, appearance: appearances[hero], progress: heroProgress(growth, hero), connection,
       player: () => player, sound, onExit: leaveDuel, onRankedAction(again) {
         leaveDuel();
         openRanked(again, connection.mode);
@@ -390,11 +431,17 @@ export function startVoyage() {
 
   function openRanked(again = false, mode) {
     player.setEnabled(false);
-    rankedLobby.open(route, selectedHero, again, mode);
+    rankedLobby.open(route, selectedHero, again, mode, appearances[selectedHero]);
+  }
+
+  function openGallery() {
+    if (duel || paused || lobby.isOpen() || rankedLobby.isOpen() || gallery.isOpen()) return;
+    player.setEnabled(false);
+    gallery.open(selectedHero);
   }
 
   function consumeInvite() {
-    if (duel || lobby.isOpen() || rankedLobby.isOpen() || !location.hash.startsWith("#duel=")) return;
+    if (duel || lobby.isOpen() || rankedLobby.isOpen() || gallery.isOpen() || !location.hash.startsWith("#duel=")) return;
     const code = location.hash;
     history.replaceState(history.state, "", location.pathname + location.search);
     openLobby(code);
@@ -416,6 +463,7 @@ export function startVoyage() {
     const action = interactionAt();
     if (!action) return;
     if (duel) { duel.leave(); return; }
+    if (action.type === "gallery") { openGallery(); return; }
     if (action.type === "learn") {
       void updateHeroGrowth((current) => ({ state: learnSignature(current, action.id) })).then(({ state }) => {
         if (!heroProgress(state, action.id).signature) return;
@@ -425,16 +473,11 @@ export function startVoyage() {
       return;
     }
     if (action.type === "hero") {
-      selectedHero = action.id;
-      try { localStorage.setItem(HERO_SAVE, JSON.stringify(selectedHero)); } catch { /* chosen for this session */ }
-      player.setHero(selectedHero);
-      canvas.dataset.hero = selectedHero;
-      refreshGrowth();
+      selectHero(action.id);
       const progress = heroProgress(growth, selectedHero);
       const signature = HEROES[selectedHero].skills[3].name;
       announce(progress.signature ? `${HEROES[selectedHero].name} selected · ${signature} ready`
         : `${HEROES[selectedHero].name} selected · Learn ${signature} here at Lv ${SIGNATURE_LEVEL} for ${SIGNATURE_PRICE} gold`);
-      sound.play("advance");
       return;
     }
     if (action.type === "practice") { enterDuel(); return; }
@@ -559,7 +602,8 @@ export function startVoyage() {
   }
 
   window.addEventListener("keydown", (event) => {
-    if (lobby.isOpen() || rankedLobby.isOpen()) return;
+    if (lobby.isOpen() || rankedLobby.isOpen() || gallery.isOpen()) return;
+    if (event.code === "KeyC" && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) openGallery();
     if (event.code === "Escape" && !event.repeat) {
       if (duel) { duel.leave(); return; }
       paused = !paused;
@@ -568,6 +612,7 @@ export function startVoyage() {
     }
     if (event.code === "KeyM" && !event.repeat) announce(sound.toggle() ? "Sound muted" : "Sound on");
   });
+  get("gallery-open").addEventListener("click", openGallery);
   window.addEventListener("keydown", () => void sound.start(), { once: true });
   window.addEventListener("pointerdown", () => void sound.start(), { once: true });
   window.addEventListener("resize", resize, { passive: true });

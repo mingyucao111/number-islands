@@ -13,6 +13,7 @@ const files = [
   "voyage/campaign.mjs", "voyage/waystones.mjs", "voyage/grove.mjs", "voyage/summit.mjs",
   "voyage/duel.css", "voyage/duel.mjs", "voyage/duel-lobby.mjs", "voyage/duel-link.mjs", "voyage/duel-arena.mjs", "voyage/combat-rules.mjs", "voyage/hero-growth.mjs",
   "voyage/ranked-lobby.mjs",
+  "voyage/appearance.mjs", "voyage/face-rig.mjs", "voyage/hero-gallery.mjs", "voyage/wardrobe.css",
   "voyage/world.mjs", "voyage/player.mjs", "voyage/mission.mjs", "voyage/vendor/three.module.min.js", "voyage/vendor/three.core.min.js", "voyage/vendor/LICENSE-three.txt",
   "chapters-early.js", "chapters-primary.js", "chapters-secondary.js", "chapters-finale.js",
   "island-quests.js", "quests.css",
